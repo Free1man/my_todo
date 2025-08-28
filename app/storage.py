@@ -86,26 +86,50 @@ def _rewrite_todos(rows: List[dict]) -> None:
             writer.writerow(row)
 
 def update_todo(owner: str, todo_id: str, *, done: Optional[bool]=None, text: Optional[str]=None) -> Optional[dict]:
-    current = []
+    """Update a todo in a read-modify-write critical section.
+
+    We hold TODOS_LOCK across both read and write to avoid races under
+    concurrent updates that could otherwise cause lost updates or intermittent
+    misses.
+    """
     target: Optional[dict] = None
-    with TODOS_LOCK, open(TODOS_CSV, "r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if row["id"] == todo_id and row["owner"] == owner:
-                target = {
-                    "id": row["id"],
-                    "owner": row["owner"],
-                    "text": text if text is not None else row["text"],
-                    "done": (done if done is not None else (row["done"].lower()=="true")),
-                    "created_at": row.get("created_at") or datetime.now(timezone.utc).isoformat(),
-                }
-                current.append(target.copy())
-            else:
-                current.append(row)
-    if not target:
-        return None
-    _rewrite_todos(current)
-    target["created_at"] = datetime.fromisoformat(target["created_at"]) if isinstance(target["created_at"], str) else target["created_at"]
+    with TODOS_LOCK:
+        # Read current rows
+        current = []
+        if not TODOS_CSV.exists():
+            return None
+        with open(TODOS_CSV, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row["id"] == todo_id and row["owner"] == owner:
+                    target = {
+                        "id": row["id"],
+                        "owner": row["owner"],
+                        "text": text if text is not None else row["text"],
+                        "done": (done if done is not None else (row["done"].lower() == "true")),
+                        "created_at": row.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                    }
+                    current.append(target.copy())
+                else:
+                    current.append(row)
+
+        if not target:
+            return None
+
+        # Write back while still holding the lock
+        with open(TODOS_CSV, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_TODO_HEADERS)
+            writer.writeheader()
+            for r in current:
+                row = r.copy()
+                if isinstance(row.get("created_at"), datetime):
+                    row["created_at"] = row["created_at"].isoformat()
+                writer.writerow(row)
+
+    # Convert for API response (outside lock)
+    target["created_at"] = (
+        datetime.fromisoformat(target["created_at"]) if isinstance(target["created_at"], str) else target["created_at"]
+    )
     return target
 
 def delete_todo(owner: str, todo_id: str) -> bool:
