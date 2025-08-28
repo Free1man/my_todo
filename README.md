@@ -24,6 +24,16 @@ docker compose port api 8000
 # Then open http://localhost:<that_port>/docs
 ```
 
+## Develop locally with Poetry
+
+```bash
+# Install Poetry if needed: https://python-poetry.org/docs/#installation
+poetry install --no-root
+
+# Run the app
+poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
 ## Endpoints
 
 - `POST /register` — body: `{"username":"alice","password":"******"}`

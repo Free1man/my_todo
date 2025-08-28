@@ -21,7 +21,6 @@
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "ms-azuretools.vscode-docker",
         "ms-python.black-formatter"
       ]
     }
@@ -29,8 +28,8 @@
 
   "updateRemoteUserUID": true,
 
-  // In case you tweak requirements locally, re-run inside the container.
-  "postCreateCommand": "pip install -r /app/requirements.txt",
+  // Install dependencies with Poetry in the container after creation
+  "postCreateCommand": "poetry install --no-root --only main",
 
   // Use the image's default CMD (uvicorn) rather than override with a shell
   "overrideCommand": false

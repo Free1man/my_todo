@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "my-todo"
+version = "0.1.0"
+description = "Tiny TODO API (FastAPI + CSV)"
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.116.1"
+uvicorn = { version = "^0.35.0", extras = ["standard"] }
+pydantic = "^2.11.6"
+passlib = { version = "^1.7.4", extras = ["bcrypt"] }
+PyJWT = "^2.10.1"
+python-dotenv = "^1.0.1"
+filelock = "^3.19.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

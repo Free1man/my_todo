@@ -11,9 +11,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install Python deps first (layer caching)
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Install Poetry and dependencies first for better layer caching
+ENV POETRY_HOME=/opt/poetry \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    PATH="/opt/poetry/bin:${PATH}"
+
+RUN curl -sSL https://install.python-poetry.org | python3 - && \
+    ln -s ${POETRY_HOME}/bin/poetry /usr/local/bin/poetry
+
+# Copy only pyproject first to leverage caching
+COPY pyproject.toml /app/pyproject.toml
+RUN poetry install --no-root --only main
 
 # Copy source
 COPY app /app/app
