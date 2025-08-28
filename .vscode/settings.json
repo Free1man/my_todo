@@ -10,5 +10,10 @@
     "**/*.pyc": true,
     "**/*.pyo": true,
     "**/*$py.class": true
-  }
+  },
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
 }

@@ -5,6 +5,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
 
 import pytest
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def random_username(prefix: str = "user") -> str:
@@ -22,12 +26,20 @@ def test_create_and_finish_randomized(http):
 
     results: Dict[str, Dict[str, List[str]]] = {}
 
+    logger.info(
+        "Starting concurrency test: users=%d, todos_per_user=%d, max_workers=%d",
+        total_users,
+        todos_per_user,
+        max_workers,
+    )
+
     def run_user_flow(username: str):
         password = "password123"
         # Register; it's fine if already exists (repeat runs)
         r = http.register(username, password)
         if r.status_code not in (201, 400):
             r.raise_for_status()
+        created_user = r.status_code == 201
         token = http.login(username, password)
 
         created_ids: List[str] = []
@@ -82,16 +94,46 @@ def test_create_and_finish_randomized(http):
         return {
             "created": created_ids,
             "finished": finished,
+            "created_user": created_user,
         }
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futures = {ex.submit(run_user_flow, name): name for name in user_names}
+        total_users_created = 0
+        total_todos_created = 0
+        total_completed = 0
         for fut in as_completed(futures):
             name = futures[fut]
-            results[name] = fut.result()
+            res = fut.result()
+            results[name] = res
+            total_users_created += 1 if res.get("created_user") else 0
+            total_todos_created += len(res["created"])
+            total_completed += len(res["finished"])
+            logger.info(
+                "User %s done: created=%d, completed=%d | progress users=%d/%d, total_created=%d, total_completed=%d",
+                name,
+                len(res["created"]),
+                len(res["finished"]),
+                len(results),
+                total_users,
+                total_todos_created,
+                total_completed,
+            )
 
     # Basic sanity across users
     assert len(results) == total_users
     for name, res in results.items():
         assert len(res["created"]) == todos_per_user
         assert len(res["finished"]) == todos_per_user
+
+    # Summary logging
+    total_created = sum(len(r["created"]) for r in results.values())
+    total_finished = sum(len(r["finished"]) for r in results.values())
+    total_users_created = sum(1 for r in results.values() if r.get("created_user"))
+    logger.info(
+        "Summary: users_created=%d/%d, todos_created=%d, todos_completed=%d",
+        total_users_created,
+        total_users,
+        total_created,
+        total_finished,
+    )

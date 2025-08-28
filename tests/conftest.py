@@ -11,10 +11,12 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
+import logging
 import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
+logger = logging.getLogger(__name__)
 
 
 def _get_free_port() -> int:
@@ -25,8 +27,18 @@ def _get_free_port() -> int:
 
 @pytest.fixture(scope="session")
 def base_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
-    # Isolate data dir per test session to avoid polluting repo files
-    tmp_data = tmp_path_factory.mktemp("data")
+    # By default, stream to repo ./data so files update during tests.
+    # Override with TEST_DATA_DIR or set to 'tmp' to isolate per-session.
+    env_data_dir = os.environ.get("TEST_DATA_DIR")
+    if env_data_dir == "tmp":
+        tmp_data = tmp_path_factory.mktemp("data")
+        logger.info("[tests] Using temporary DATA_DIR (isolated): %s", tmp_data)
+    elif env_data_dir:
+        tmp_data = Path(env_data_dir)
+        logger.info("[tests] Using DATA_DIR from TEST_DATA_DIR: %s", tmp_data)
+    else:
+        tmp_data = DATA_DIR
+        logger.info("[tests] Using repo DATA_DIR by default: %s", tmp_data)
 
     env = os.environ.copy()
     env["DATA_DIR"] = str(tmp_data)
@@ -47,7 +59,15 @@ def base_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         "--log-level",
         "warning",
     ]
-    proc = subprocess.Popen(cmd, cwd=str(ROOT), env=env)
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(ROOT),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    logger.info("[tests] Started uvicorn (pid=%s) with DATA_DIR=%s", proc.pid, env["DATA_DIR"])
 
     # Wait for health endpoint
     url = f"http://127.0.0.1:{port}"
@@ -58,11 +78,22 @@ def base_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
                 break
         except Exception:
             pass
+        # If process died early, surface logs
+        if proc.poll() is not None:
+            out, err = proc.communicate(timeout=2)
+            raise RuntimeError(f"Server exited early (code={proc.returncode}). STDOUT:\n{out}\nSTDERR:\n{err}")
         time.sleep(0.25)
     else:
+        try:
+            out, err = proc.communicate(timeout=2)
+        except Exception:
+            out, err = ("", "")
         proc.terminate()
-        proc.wait(timeout=5)
-        raise RuntimeError("Server did not start in time")
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        raise RuntimeError(f"Server did not start in time. STDOUT:\n{out}\nSTDERR:\n{err}")
 
     try:
         yield url

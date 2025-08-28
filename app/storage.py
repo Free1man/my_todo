@@ -17,16 +17,54 @@ TODOS_LOCK = FileLock(str(TODOS_CSV) + ".lock")
 CSV_USER_HEADERS = ["username", "password_hash"]
 CSV_TODO_HEADERS = ["id", "owner", "text", "done", "created_at"]
 
+
+def _ensure_csv_headers(path: Path, headers: List[str], lock: FileLock) -> None:
+    """Ensure CSV file exists and has a header row matching headers.
+
+    If the file doesn't exist or is empty, create it with header.
+    If it exists but the first row isn't the expected header, rewrite the file
+    by prepending the header and keeping existing rows as-is.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with lock:
+        if not path.exists() or path.stat().st_size == 0:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
+            return
+
+        # Check first row
+        with open(path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            first = next(reader, None)
+
+        if first is None:
+            # Empty file (size > 0 but no rows?) — just write header
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
+            return
+
+        # If header already matches, nothing to do
+        if [c.strip() for c in first] == headers:
+            return
+
+        # Otherwise, rewrite file: prepend header then existing rows unchanged
+        with open(path, "r", newline="", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            # If the original first row was actually a header with wrong names,
+            # we still keep all rows to avoid data loss.
+            for row in rows:
+                writer.writerow(row)
+
 def init_storage() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if not USERS_CSV.exists():
-        with USERS_LOCK, open(USERS_CSV, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_USER_HEADERS)
-            writer.writeheader()
-    if not TODOS_CSV.exists():
-        with TODOS_LOCK, open(TODOS_CSV, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_TODO_HEADERS)
-            writer.writeheader()
+    _ensure_csv_headers(USERS_CSV, CSV_USER_HEADERS, USERS_LOCK)
+    _ensure_csv_headers(TODOS_CSV, CSV_TODO_HEADERS, TODOS_LOCK)
 
 def load_users() -> Dict[str, str]:
     users: Dict[str, str] = {}
