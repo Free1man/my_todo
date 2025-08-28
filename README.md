@@ -11,11 +11,11 @@ poetry install --with dev
 poetry run pytest -q
 ```
 
-# Tiny TODO API (FastAPI + CSV)
+# Tiny TODO API (FastAPI + Postgres)
 
-A super-simple local TODO backend with user registration & JWT auth.
+A simple TODO backend with user registration & JWT auth.
 
-- **Storage:** CSV files (users & todos) in `./data` (easy to swap later)
+- **Storage:** PostgreSQL via SQLAlchemy (fully concurrent-safe)
 - **API:** FastAPI with JWT (PyJWT) + password hashing (passlib[bcrypt])
 - **Dev:** VS Code Dev Containers
 - **Run:** Docker Compose
@@ -34,7 +34,7 @@ docker compose up --build
 # Open the interactive docs:
 # http://localhost:8000/docs
 
-Note: Docker Compose bind-mounts the local `./data` folder into the container at `/app/data`, so `users.csv` and `todos.csv` persist and stay in sync with your workspace files across rebuilds.
+Services: `api` (FastAPI) and `db` (Postgres 16). The API connects using `DATABASE_URL`.
 ```
 
 ## Develop locally with Poetry
@@ -43,7 +43,7 @@ Note: Docker Compose bind-mounts the local `./data` folder into the container at
 # Install Poetry if needed: https://python-poetry.org/docs/#installation
 poetry install --no-root
 
-# Run the app
+# Run the app (requires a local Postgres or set DATABASE_URL). For Docker, use compose above.
 poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -65,6 +65,6 @@ All `/todos*` require `Authorization: Bearer <token>` from `/login`.
 3. Run the app: `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
 	- Dev Containers will auto-forward port 8000 for you, no host publish is required.
 
-## Swap CSV for a DB later
+## Database
 
-All file I/O is isolated in `app/storage.py`. Replace implementations there.
+The ORM models live in `app/models.py` and the DB setup in `app/db.py`.

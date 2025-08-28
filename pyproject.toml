@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "my-todo"
 version = "0.1.0"
-description = "Tiny TODO API (FastAPI + CSV)"
+description = "Tiny TODO API (FastAPI + Postgres)"
 authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 package-mode = false
@@ -14,7 +14,8 @@ pydantic = "^2.11.6"
 passlib = { version = "^1.7.4", extras = ["bcrypt"] }
 PyJWT = "^2.10.1"
 python-dotenv = "^1.0.1"
-filelock = "^3.19.1"
+SQLAlchemy = "^2.0.36"
+psycopg = {version = "^3.2.9", extras = ["binary"]}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.3"

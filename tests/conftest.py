@@ -47,7 +47,7 @@ def base_url() -> Iterator[str]:
     try:
         yield url
     finally:
-        subprocess.run(["docker", "compose", "stop", "api"], cwd=str(ROOT), check=False)
+        subprocess.run(["docker", "compose", "stop", "api", "db"], cwd=str(ROOT), check=False)
 
 
 @pytest.fixture()
