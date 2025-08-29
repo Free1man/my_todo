@@ -25,15 +25,28 @@ def _get_free_port(host: str = "127.0.0.1") -> int:
 
 @pytest.fixture(scope="session")
 def base_url() -> Iterator[str]:
-    """Run tests against the Dockerized API at http://127.0.0.1:8000.
-
-    This fixture brings up the Compose service, waits for /health, yields the URL,
-    and stops the service after the test session.
     """
+    Provide a base URL to the API for integration tests.
+
+    - When running outside a container, spin up the Docker Compose stack on a
+      free host port and return the mapped URL (as before).
+    - When running inside a container (for example, in a devcontainer or CI
+      container), assume the API is already running and return a default URL.
+      You can override the default via the BASE_URL environment variable.
+    """
+    default_env_url = os.getenv("BASE_URL")
+    inside_container = os.path.exists("/.dockerenv")
+    if default_env_url or inside_container:
+        # Use provided BASE_URL or fall back to the standard API port.
+        url = default_env_url or "http://127.0.0.1:8000"
+        logger.info("[tests] Using existing API instance at %s", url)
+        yield url
+        return
+
+    # Otherwise, spin up a fresh Docker Compose stack as before.
     port = _get_free_port()
     env = os.environ.copy()
     env["PORT"] = str(port)
-
     up_cmd = ["docker", "compose", "up", "-d", "--build", "--wait"]
     logger.info("[tests] Starting docker compose on PORT=%s: %s", port, " ".join(up_cmd))
     up_proc = subprocess.run(up_cmd, cwd=str(ROOT), env=env, capture_output=True, text=True)
@@ -41,9 +54,7 @@ def base_url() -> Iterator[str]:
         raise RuntimeError(
             f"docker compose up failed:\nSTDOUT:\n{up_proc.stdout}\nSTDERR:\n{up_proc.stderr}"
         )
-
     url = f"http://127.0.0.1:{port}"
-
     try:
         yield url
     finally:
