@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        PROD: ${PROD:-true}
     ports:
       - "${PORT:-8000}:8000"
     env_file:

@@ -11,6 +11,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Build-time switch: set to true for production, false for dev/test
+ARG PROD=true
+
 # Install Poetry and dependencies first for better layer caching
 ENV POETRY_HOME=/opt/poetry \
     POETRY_NO_INTERACTION=1 \
@@ -20,12 +23,24 @@ ENV POETRY_HOME=/opt/poetry \
 RUN curl -sSL https://install.python-poetry.org | python3 - && \
     ln -s ${POETRY_HOME}/bin/poetry /usr/local/bin/poetry
 
-# Copy only pyproject first to leverage caching
+# Copy only pyproject (and lock) first to leverage caching
 COPY pyproject.toml /app/pyproject.toml
-RUN poetry install --no-root --only main
+COPY poetry.lock /app/poetry.lock
+# Ensure lock file metadata matches current Poetry version/format
+RUN poetry lock
+# Install dependencies: only main in PROD, with dev tools otherwise
+RUN if [ "$PROD" = "true" ]; then \
+            poetry install --no-root --only main; \
+        else \
+            poetry install --no-root --with dev; \
+        fi
 
 # Copy source
 COPY app /app/app
+
+# Optionally include tests in non-prod builds
+COPY tests /app/tests
+RUN if [ "$PROD" = "true" ]; then rm -rf /app/tests; fi
 
 # Sensible defaults (can be overridden by .env)
 ENV ACCESS_TOKEN_EXPIRE_MINUTES=60

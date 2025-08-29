@@ -18,7 +18,7 @@ def random_username(prefix: str = "user") -> str:
 
 @pytest.mark.timeout(120)
 def test_create_and_finish_randomized(http):
-    total_users = 10
+    total_users = 32
     todos_per_user = 100
     max_workers = min(32, total_users)
 
@@ -36,15 +36,21 @@ def test_create_and_finish_randomized(http):
     def run_user_flow(username: str):
         password = "password123"
         # Register; it's fine if already exists (repeat runs)
+        t0 = time.perf_counter()
         r = http.register(username, password)
+        t1 = time.perf_counter()
         if r.status_code not in (201, 400):
             r.raise_for_status()
         created_user = r.status_code == 201
+        user_creation_ms = (t1 - t0) * 1000.0 if created_user else None
         token = http.login(username, password)
 
         created_ids: List[str] = []
         unfinished: List[str] = []
         finished: List[str] = []
+
+        create_durations_ms: List[float] = []
+        finish_durations_ms: List[float] = []
 
         creates_remaining = todos_per_user
         finishes_remaining = todos_per_user
@@ -56,7 +62,10 @@ def test_create_and_finish_randomized(http):
             if creates_remaining > 0 and (not unfinished or random.random() < 0.6):
                 # create
                 text = f"todo for {username} #{todos_per_user - creates_remaining + 1}"
+                t0 = time.perf_counter()
                 item = http.create_todo(token, text)
+                t1 = time.perf_counter()
+                create_durations_ms.append((t1 - t0) * 1000.0)
                 created_ids.append(item["id"])
                 unfinished.append(item["id"])
                 creates_remaining -= 1
@@ -64,7 +73,10 @@ def test_create_and_finish_randomized(http):
                 # finish random unfinished
                 tidx = random.randrange(0, len(unfinished))
                 todo_id = unfinished.pop(tidx)
+                t0 = time.perf_counter()
                 item = http.finish_todo(token, todo_id)
+                t1 = time.perf_counter()
+                finish_durations_ms.append((t1 - t0) * 1000.0)
                 assert item["done"] is True
                 finished.append(todo_id)
                 finishes_remaining -= 1
@@ -76,7 +88,10 @@ def test_create_and_finish_randomized(http):
         # If anything left unfinished due to randomness, finish them now
         while unfinished:
             todo_id = unfinished.pop()
+            t0 = time.perf_counter()
             item = http.finish_todo(token, todo_id)
+            t1 = time.perf_counter()
+            finish_durations_ms.append((t1 - t0) * 1000.0)
             assert item["done"] is True
             finished.append(todo_id)
 
@@ -95,6 +110,11 @@ def test_create_and_finish_randomized(http):
             "created": created_ids,
             "finished": finished,
             "created_user": created_user,
+            "metrics": {
+                "user_creation_ms": user_creation_ms,
+                "create_ms": create_durations_ms,
+                "finish_ms": finish_durations_ms,
+            },
         }
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
@@ -136,4 +156,19 @@ def test_create_and_finish_randomized(http):
         total_users,
         total_created,
         total_finished,
+    )
+
+    # Metrics: average durations (ms)
+    user_creation_times = [r["metrics"]["user_creation_ms"] for r in results.values() if r["metrics"]["user_creation_ms"] is not None]
+    create_times = [ms for r in results.values() for ms in r["metrics"]["create_ms"]]
+    finish_times = [ms for r in results.values() for ms in r["metrics"]["finish_ms"]]
+
+    def _avg(values: List[float]) -> float:
+        return (sum(values) / len(values)) if values else 0.0
+
+    logger.info(
+        "Averages (ms): user_creation=%.2f (n=%d), todo_creation=%.2f (n=%d), todo_completion=%.2f (n=%d)",
+        _avg(user_creation_times), len(user_creation_times),
+        _avg(create_times), len(create_times),
+        _avg(finish_times), len(finish_times),
     )

@@ -16,7 +16,7 @@
     "vscode": {
       "settings": {
         "terminal.integrated.shell.linux": "/bin/bash",
-        "python.analysis.typeCheckingMode": "basic"
+        "python.analysis.typeCheckingMode": "standard"
       },
       "extensions": [
         "ms-python.python",
@@ -27,9 +27,6 @@
   },
 
   "updateRemoteUserUID": true,
-
-  // Install dependencies with Poetry in the container after creation
-  "postCreateCommand": "poetry install --no-root --only main",
 
   // Use the image's default CMD (uvicorn) rather than override with a shell
   "overrideCommand": false
