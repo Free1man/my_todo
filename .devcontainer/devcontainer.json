@@ -1,9 +1,11 @@
 {
-  "name": "My Todo Dev Container",
+  "name": "Abstract Tactics Dev Container",
   "dockerComposeFile": ["../docker-compose.yml"],
   "service": "api",
   "workspaceFolder": "/app",
-
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/app,type=bind"
+  ],
   "forwardPorts": [8000],
   "portsAttributes": {
     "8000": {

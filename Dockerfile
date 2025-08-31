@@ -1,7 +1,7 @@
 # Runtime image
 FROM python:3.12-slim
 
-# System deps (for bcrypt wheels & general build tools)
+# System deps (general build tools and curl for Poetry installer)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl \
  && rm -rf /var/lib/apt/lists/*
@@ -41,9 +41,6 @@ COPY app /app/app
 # Optionally include tests in non-prod builds
 COPY tests /app/tests
 RUN if [ "$PROD" = "true" ]; then rm -rf /app/tests; fi
-
-# Sensible defaults (can be overridden by .env)
-ENV ACCESS_TOKEN_EXPIRE_MINUTES=60
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

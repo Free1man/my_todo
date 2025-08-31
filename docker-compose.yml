@@ -10,8 +10,8 @@ services:
     env_file:
       - .env
     # Bind-mount the project into the container (useful in dev)
-    volumes:
-      - ./:/app:cached
+    # volumes:
+    #   - ./:/app:cached
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health || exit 1"]
       interval: 2s
@@ -19,11 +19,6 @@ services:
       retries: 60
       start_period: 2s
     restart: unless-stopped
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/mytodo}
-    depends_on:
-      db:
-        condition: service_healthy
     # Run with auto-reload only when PROD is false
     command: >
       bash -lc 'if [ "${PROD:-true}" = "false" ]; then
@@ -32,20 +27,4 @@ services:
         uvicorn app.main:app --host 0.0.0.0 --port 8000;
       fi'
 
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: mytodo
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d mytodo"]
-      interval: 2s
-      timeout: 3s
-      retries: 60
-      start_period: 5s
-
-volumes:
-  pgdata:
+  

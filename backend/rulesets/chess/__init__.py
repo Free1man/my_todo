@@ -1,0 +1,1 @@
+"""Chess ruleset package."""
