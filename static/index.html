@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abstract Tactics - Chess & TBS</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Abstract Tactics</h1>
+        <p>Choose your game type to start playing:</p>
+
+        <div class="game-selection">
+            <select id="ruleset-select">
+                <option value="chess">Chess</option>
+                <option value="tbs">Turn-Based Strategy (TBS)</option>
+            </select>
+            <button id="create-game-btn">Create New Game</button>
+        </div>
+
+        <div id="loading" style="display: none;">Creating game...</div>
+
+        <div id="game-list">
+            <h2>Your Games</h2>
+            <div id="games-container"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

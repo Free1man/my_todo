@@ -37,6 +37,7 @@ RUN if [ "$PROD" = "true" ]; then \
 
 # Copy source
 COPY backend /app/backend
+COPY static /app/static
 
 # Optionally include tests in non-prod builds
 COPY tests /app/tests

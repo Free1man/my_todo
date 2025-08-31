@@ -1,0 +1,364 @@
+/* Basic styling for the game UI */
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+h1, h2, h3 {
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.game-selection {
+    margin: 30px 0;
+    padding: 20px;
+    background: #f9f9f9;
+    border-radius: 5px;
+}
+
+.game-selection select, .game-selection button {
+    padding: 10px;
+    margin: 0 10px;
+    font-size: 16px;
+}
+
+.game-selection button {
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.game-selection button:hover {
+    background: #0056b3;
+}
+
+.game-selection button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.game-card {
+    border: 1px solid #ddd;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+    background: #fafafa;
+}
+
+.game-card h3 {
+    margin-top: 0;
+    color: #007bff;
+}
+
+.game-card button {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.game-card button:hover {
+    background: #218838;
+}
+
+.game-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.game-header button {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.game-header button:hover {
+    background: #545b62;
+}
+
+.status {
+    background: #e9ecef;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.status h3 {
+    margin-top: 0;
+    color: #495057;
+}
+
+.game-content {
+    display: flex;
+    gap: 30px;
+}
+
+.game-board {
+    flex: 1;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 5px;
+    border: 1px solid #dee2e6;
+}
+
+.chess-board {
+    font-family: 'Segoe UI Symbol', 'Arial Unicode MS', sans-serif;
+    font-size: 18px;
+    line-height: 1.2;
+    white-space: pre;
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+    display: inline-block;
+    font-weight: bold;
+    letter-spacing: 2px;
+}
+
+.chess-board .piece {
+    display: inline-block;
+    width: 35px;
+    height: 35px;
+    text-align: center;
+    line-height: 35px;
+    margin: 1px;
+    border-radius: 4px;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.chess-board .piece.light {
+    background-color: #f0d9b5;
+}
+
+.chess-board .piece.dark {
+    background-color: #b58863;
+}
+
+.chess-board .piece:hover {
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
+.tbs-grid {
+    display: inline-grid;
+    grid-template-columns: repeat(auto-fit, 40px);
+    gap: 2px;
+    background: #2c3e50;
+    padding: 10px;
+    border-radius: 8px;
+    border: 2px solid #34495e;
+}
+
+.tbs-cell {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tbs-cell:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 8px rgba(0,0,0,0.3);
+}
+
+.tbs-cell.obstacle {
+    background: #7f8c8d;
+    color: #ecf0f1;
+    cursor: not-allowed;
+}
+
+.tbs-cell.unit.A {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    border: 2px solid #21618c;
+}
+
+.tbs-cell.unit.B {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+    border: 2px solid #922b21;
+}
+
+.tbs-cell.empty {
+    background: #ecf0f1;
+    color: #7f8c8d;
+    border: 1px solid #bdc3c7;
+}
+
+.tbs-cell.empty:hover {
+    background: #d5dbdb;
+}
+
+.game-controls {
+    flex: 1;
+    max-width: 400px;
+}
+
+.game-controls h3 {
+    margin-top: 0;
+}
+
+.action-fields {
+    margin: 15px 0;
+}
+
+.action-fields input {
+    display: block;
+    width: 100%;
+    padding: 8px;
+    margin: 5px 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.game-controls button {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.game-controls button:hover {
+    background: #0056b3;
+}
+
+.control-group {
+    margin: 15px 0;
+}
+
+.control-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #333;
+}
+
+.control-group select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.control-group select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+#evaluation-result {
+    margin-top: 20px;
+    padding: 15px;
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    border-radius: 5px;
+}
+
+#evaluation-result h3 {
+    color: #155724;
+    margin-top: 0;
+}
+
+#eval-output {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+/* Error message styling */
+#error-message {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #dc3545;
+    color: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10000; /* Higher z-index to ensure it's on top */
+    max-width: 400px;
+    font-family: Arial, sans-serif;
+    border-left: 4px solid #b02a37;
+    animation: slideIn 0.3s ease-out;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+#error-message button {
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+#error-message button:hover {
+    opacity: 1;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Responsive error message */
+@media (max-width: 768px) {
+    #error-message {
+        left: 10px;
+        right: 10px;
+        max-width: none;
+        top: 10px;
+        font-size: 13px;
+        padding: 12px 16px;
+    }
+}

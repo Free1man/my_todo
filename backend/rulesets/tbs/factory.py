@@ -20,11 +20,12 @@ def quickstart(
         sword = Item(id=uuid4().hex, name="Sword", attack_bonus=2)
         shield = Item(id=uuid4().hex, name="Shield", defense_bonus=1)
         bow = Item(id=uuid4().hex, name="Bow", range_bonus=1)
-        items = [sword, shield, bow]
+        boots = Item(id=uuid4().hex, name="Boots of Speed", range_bonus=2)
+        items = [sword, shield, bow, boots]
 
     if units is None:
-        sword, shield, bow = list(items)  # type: ignore
-        a = Unit(id=uuid4().hex, side="A", name="Alice", pos=Pos(x=0, y=0), item_ids=[sword.id])
+        sword, shield, bow, boots = list(items)  # type: ignore
+        a = Unit(id=uuid4().hex, side="A", name="Alice", pos=Pos(x=0, y=0), item_ids=[sword.id, boots.id])
         b = Unit(id=uuid4().hex, side="B", name="Bob",   pos=Pos(x=5, y=5), item_ids=[shield.id])
         c = Unit(id=uuid4().hex, side="A", name="Cara",  pos=Pos(x=1, y=1), item_ids=[bow.id], strength=2, defense=1, max_hp=8, hp=8)
         units = [a, b, c]

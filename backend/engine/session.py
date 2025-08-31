@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Dict
 from pydantic import BaseModel, Field
 import uuid
+from datetime import datetime
 
 
 class Session(BaseModel):
@@ -10,3 +11,4 @@ class Session(BaseModel):
     scheduler: str
     state: Dict[str, Any]
     meta: Dict[str, Any] = Field(default_factory=dict)
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())

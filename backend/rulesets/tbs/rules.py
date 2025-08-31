@@ -4,8 +4,11 @@ from backend.core.primitives import Pos
 from .models import State, Unit
 
 
-def is_adjacent_orthogonal(a: Pos, b: Pos) -> bool:
-    return abs(a.x - b.x) + abs(a.y - b.y) == 1
+def is_adjacent(a: Pos, b: Pos) -> bool:
+    """Check if two positions are adjacent (including diagonally)."""
+    dx = abs(a.x - b.x)
+    dy = abs(a.y - b.y)
+    return dx <= 1 and dy <= 1 and (dx + dy) > 0
 
 
 def _occupied(st: State, p: Pos, ignore: str | None = None) -> bool:
@@ -18,13 +21,17 @@ def _occupied(st: State, p: Pos, ignore: str | None = None) -> bool:
 def can_move_one(st: State, unit: Unit, to: Pos) -> tuple[bool, str | None]:
     if unit.ap <= 0: return False, "No AP left"
     if not st.map.is_walkable(to): return False, "Destination blocked or out of bounds"
-    if not is_adjacent_orthogonal(unit.pos, to): return False, "Move one tile orthogonally"
+    # Check if move is within unit's range (considering items)
+    dist = abs(unit.pos.x - to.x) + abs(unit.pos.y - to.y)
+    if dist > unit.total_range(st.items): return False, f"Move out of range (max {unit.total_range(st.items)} tiles)"
     if _occupied(st, to, ignore=unit.id): return False, "Tile occupied"
     return True, None
 
 
 def explain_move(st: State, unit: Unit, to: Pos) -> Dict[str, Any]:
     ok, err = can_move_one(st, unit, to)
+    dist = abs(unit.pos.x - to.x) + abs(unit.pos.y - to.y)
+    max_range = unit.total_range(st.items)
     return {
         "unit": unit.id,
         "from": unit.pos.model_dump(),
@@ -33,7 +40,9 @@ def explain_move(st: State, unit: Unit, to: Pos) -> Dict[str, Any]:
             "has_ap": unit.ap > 0,
             "in_bounds": st.map.in_bounds(to),
             "not_obstacle": st.map.is_walkable(to),
-            "adjacent_orthogonal": is_adjacent_orthogonal(unit.pos, to),
+            "in_range": dist <= max_range,
+            "max_range": max_range,
+            "actual_distance": dist,
             "target_occupied": _occupied(st, to, ignore=unit.id),
         },
         "result": ok,

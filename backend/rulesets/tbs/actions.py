@@ -7,7 +7,7 @@ from .rules import can_move_one, explain_move, in_attack_range, explain_damage, 
 
 
 class MovePayload(BaseModel):
-    """Move one tile orthogonally if legal."""
+    """Move one tile in any direction (including diagonally) if legal and no obstacle."""
     type: Literal["move"] = "move"
     unit_id: str
     to: Pos

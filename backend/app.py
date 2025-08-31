@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.engine.session import Session
@@ -47,6 +48,13 @@ async def health() -> Dict[str, Any]:
 async def rulesets() -> Dict[str, Dict[str, str]]:
     # maps ruleset name -> default scheduler
     return {"rulesets": list_rulesets()}
+
+
+@app.get("/sessions")
+async def list_sessions() -> list[Session]:
+    """List all game sessions."""
+    sessions = await store.all()
+    return list(sessions.values())
 
 
 @app.post("/sessions", response_model=Session)
@@ -108,3 +116,6 @@ async def apply_action(sid: str, raw: Dict[str, Any] = Body(...)) -> Session:
         pass
     await store_set(s)
     return s
+
+# Mount static files (after all API routes to avoid conflicts)
+app.mount("/", StaticFiles(directory="static", html=True), name="static")

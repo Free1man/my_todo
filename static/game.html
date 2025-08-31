@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Session</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="game-header">
+            <h1 id="game-title">Game Session</h1>
+            <button id="back-btn">← Back to Games</button>
+        </div>
+
+        <div id="game-status" class="status"></div>
+
+        <div class="game-content">
+            <div id="game-board" class="game-board"></div>
+
+            <div class="game-controls">
+                <div id="action-form">
+                    <h3>Make a Move</h3>
+                    <div id="chess-controls" style="display: none;">
+                        <div class="control-group">
+                            <label>Select Piece:</label>
+                            <select id="chess-piece-select">
+                                <option value="">Choose a piece...</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Move to:</label>
+                            <select id="chess-move-select">
+                                <option value="">Select destination...</option>
+                            </select>
+                        </div>
+                        <button id="submit-chess-move">Submit Move</button>
+                    </div>
+
+                    <div id="tbs-controls" style="display: none;">
+                        <div class="control-group">
+                            <label>Action Type:</label>
+                            <select id="tbs-action-type">
+                                <option value="move">Move</option>
+                                <option value="attack">Attack</option>
+                                <option value="end_turn">End Turn</option>
+                            </select>
+                        </div>
+
+                        <div id="unit-selection" class="control-group">
+                            <label>Select Unit:</label>
+                            <select id="tbs-unit-select">
+                                <option value="">Choose a unit...</option>
+                            </select>
+                        </div>
+
+                        <div id="move-fields" class="action-fields">
+                            <div class="control-group">
+                                <label>Move to:</label>
+                                <select id="tbs-move-select">
+                                    <option value="">Select destination...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="attack-fields" class="action-fields" style="display: none;">
+                            <div class="control-group">
+                                <label>Attack Target:</label>
+                                <select id="tbs-target-select">
+                                    <option value="">Select target...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button id="submit-tbs-action">Submit Action</button>
+                    </div>
+                </div>
+
+                <div id="evaluation-result" style="display: none;">
+                    <h3>Action Preview</h3>
+                    <pre id="eval-output"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
