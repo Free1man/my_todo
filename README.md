@@ -1,6 +1,6 @@
 # Abstract Tactics Backend (TBS + Chess)
 
-A small, ruleset-agnostic turn-based tactics backend with two plug-ins: Generic TBS and Chess. The FastAPI app is exposed at `app.main:app`.
+A small, ruleset-agnostic turn-based tactics backend with two plug-ins: Generic TBS and Chess. The FastAPI app is exposed at `backend.app:app`.
 
 - API: evaluate/apply with detailed explanations
 - Rulesets: `tbs` and `chess` auto-registered

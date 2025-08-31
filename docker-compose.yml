@@ -9,9 +9,9 @@ services:
       - "${PORT:-8000}:8000"
     env_file:
       - .env
-    # Bind-mount the project into the container (useful in dev)
-    # volumes:
-    #   - ./:/app:cached
+    # Dev bind mount (uncommented); use ':cached' only on Docker Desktop/macOS
+    volumes:
+      - ./:/app
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health || exit 1"]
       interval: 2s
@@ -22,9 +22,9 @@ services:
     # Run with auto-reload only when PROD is false
     command: >
       bash -lc 'if [ "${PROD:-true}" = "false" ]; then
-        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload;
+        uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload;
       else
-        uvicorn app.main:app --host 0.0.0.0 --port 8000;
+        uvicorn backend.app:app --host 0.0.0.0 --port 8000;
       fi'
 
   
