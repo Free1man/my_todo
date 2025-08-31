@@ -3,6 +3,7 @@ import subprocess
 from typing import Iterator
 import socket
 from contextlib import closing
+import time
 
 import pytest
 import logging
@@ -52,10 +53,25 @@ def base_url() -> Iterator[str]:
             f"docker compose up failed:\nSTDOUT:\n{up_proc.stdout}\nSTDERR:\n{up_proc.stderr}"
         )
     url = f"http://127.0.0.1:{port}"
+    # Wait for API to be healthy
+    logger.info("[tests] Waiting for API health check...")
+    for attempt in range(30):  # Wait up to 30 seconds
+        try:
+            response = requests.get(f"{url}/health", timeout=5)
+            if response.status_code == 200:
+                health_data = response.json()
+                logger.info(f"[tests] Health check passed (attempt {attempt + 1}): {health_data}")
+                break
+        except Exception as e:
+            logger.debug(f"[tests] Health check attempt {attempt + 1} failed: {e}")
+        time.sleep(1)
+    else:
+        raise RuntimeError("API health check failed after 30 seconds")
+    
     try:
         yield url
     finally:
-        subprocess.run(["docker", "compose", "stop", "api", "db"], cwd=str(ROOT), check=False)
+        subprocess.run(["docker", "compose", "stop", "api", "redis"], cwd=str(ROOT), check=False)
 
 
 @pytest.fixture()

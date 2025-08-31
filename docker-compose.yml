@@ -1,4 +1,15 @@
 services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -9,6 +20,10 @@ services:
       - "${PORT:-8000}:8000"
     env_file:
       - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
     # Dev bind mount (uncommented); use ':cached' only on Docker Desktop/macOS
     volumes:
       - ./:/app
