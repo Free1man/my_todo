@@ -38,28 +38,39 @@
 <body>
   <h1>Turn-Based Strategy Demo</h1>
 
-  <div class="panel">
-    <button id="new">New Game</button>
-    <button id="end-turn" disabled>End Turn</button>
-    <button id="legal">Show Legal Actions</button>
-    <div class="status">
-      <span>Session: <b id="sid">-</b></span> |
-      <span>Turn: <b id="turn">-</b></span> |
-      <span>Side: <b id="side">-</b></span>
+  <div id="sessions">
+    <div class="panel">
+      <strong>Existing Sessions</strong>
+      <button id="refresh-sessions" class="action-btn">Refresh</button>
     </div>
+    <div id="sessions-list" class="panel" style="flex-direction: column; align-items: stretch;"></div>
   </div>
 
-  <div class="panel">
-    <div class="unit-info">
-      <span>Current Unit: <b id="current-unit">none</b></span> |
-      <span>AP: <b id="ap">-</b></span> |
-      <span>Selected: <b id="sel">none</b></span>
+  <div id="game" style="display:none;">
+    <div class="panel">
+      <button id="new" type="button">New Game</button>
+      <button id="end-turn" type="button" disabled>End Turn</button>
+  <button id="legal" type="button">Show Legal Actions</button>
+  <button id="show-sessions" type="button">Show Sessions</button>
+      <div class="status">
+        <span>Session: <b id="sid">-</b></span> |
+        <span>Turn: <b id="turn">-</b></span> |
+        <span>Side: <b id="side">-</b></span>
+      </div>
     </div>
+
+    <div class="panel">
+      <div class="unit-info">
+        <span>Current Unit: <b id="current-unit">none</b></span> |
+        <span>AP: <b id="ap">-</b></span> |
+        <span>Selected: <b id="sel">none</b></span>
+      </div>
+    </div>
+
+    <div id="grid"></div>
+
+    <div class="log" id="log"></div>
   </div>
-
-  <div id="grid"></div>
-
-  <div class="log" id="log"></div>
 
 <script>
 let SID = null;
@@ -104,6 +115,78 @@ function updateUI() {
   endTurnBtn.disabled = !SID;
 }
 
+function showGame() {
+  document.getElementById('sessions').style.display = 'none';
+  document.getElementById('game').style.display = '';
+}
+
+function showSessions() {
+  document.getElementById('game').style.display = 'none';
+  document.getElementById('sessions').style.display = '';
+}
+
+async function refreshSessions() {
+  const container = document.getElementById('sessions-list');
+  container.innerHTML = '';
+  try {
+    const sessions = await api('/sessions');
+    if (!Array.isArray(sessions) || sessions.length === 0) {
+      const empty = document.createElement('div');
+      empty.textContent = 'No sessions yet.';
+      empty.style.color = '#666';
+      container.appendChild(empty);
+      return;
+    }
+    sessions.forEach(s => {
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.alignItems = 'center';
+      row.style.justifyContent = 'space-between';
+      row.style.gap = '8px';
+      row.style.padding = '6px 8px';
+      row.style.border = '1px solid #eee';
+      row.style.borderRadius = '4px';
+
+      const info = document.createElement('div');
+      const m = s.mission || {};
+      const unitsCount = m.units ? Object.keys(m.units).length : 0;
+      info.textContent = `${s.id} — Turn ${m.turn ?? '-'} | Side ${m.side_to_move ?? '-'} | Units ${unitsCount}`;
+
+    const btn = document.createElement('button');
+      btn.className = 'action-btn';
+      btn.textContent = 'Continue';
+      const doLoad = async () => {
+        try {
+          const sess = await api(`/sessions/${s.id}`);
+          SID = sess.id;
+          STATE = sess.mission;
+          SELECTED = null;
+          LEGAL_ACTIONS = [];
+          log(`Loaded session ${SID}`);
+          updateUI();
+          render();
+      showGame();
+      document.getElementById('game').scrollIntoView({behavior:'smooth', block:'start'});
+        } catch (e) {
+          log(`Error loading session: ${e.message}`, 'error');
+        }
+      };
+      btn.onclick = doLoad;
+      // Also allow clicking the row (not just the button) to load
+      row.onclick = (ev) => {
+        if (ev.target === btn) return; // avoid double fire
+        doLoad();
+      };
+
+      row.appendChild(info);
+      row.appendChild(btn);
+      container.appendChild(row);
+    });
+  } catch (e) {
+    log(`Error fetching sessions: ${e.message}`, 'error');
+  }
+}
+
 document.getElementById('new').onclick = async () => {
   try {
     log('Creating new session...');
@@ -115,6 +198,8 @@ document.getElementById('new').onclick = async () => {
     log(`Session ${SID} created`);
     updateUI();
     render();
+  showGame();
+  refreshSessions();
   } catch (e) {
     log(`Error: ${e.message}`, 'error');
   }
@@ -257,6 +342,9 @@ function render() {
 
 // Initialize
 updateUI();
+document.getElementById('refresh-sessions').onclick = refreshSessions;
+document.getElementById('show-sessions').onclick = () => { showSessions(); refreshSessions(); document.getElementById('sessions').scrollIntoView({behavior:'smooth', block:'start'}); };
+refreshSessions();
 </script>
 </body>
 </html>

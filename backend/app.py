@@ -2,7 +2,7 @@ from __future__ import annotations
 import os
 from uuid import uuid4
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any
@@ -40,13 +40,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 def index():
-    return """<!doctype html><html><head><meta charset=\"utf-8\"><title>TBS</title></head>
-<body>
-    <h1>Abstract Tactics — TBS</h1>
-    <p>Open <a href=\"/static/index.html\">UI</a></p>
-</body></html>"""
+    return RedirectResponse(url="/static/index.html", status_code=307)
 
 @app.get("/health")
 def health() -> Dict[str, Any]:
