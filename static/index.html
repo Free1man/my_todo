@@ -13,9 +13,10 @@
     .PLAIN { background:#f5f5f5; }
     .FOREST { background:#8bc34a; }
     .HILL { background:#ff9800; }
-    .selected { outline: 2px solid #ff9800; box-shadow: 0 0 4px rgba(255,152,0,0.5); }
-    .current { outline: 2px solid #2196f3; box-shadow: 0 0 4px rgba(33,150,243,0.5); }
-    .u { border-radius: 50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-weight: bold; font-size: 10px; position: relative; }
+  /* Selected/current highlights on the TILE to cover full square */
+  .tile.selected { box-shadow: inset 0 0 0 3px #4caf50; }
+  .tile.current { box-shadow: inset 0 0 0 2px #2196f3; }
+  .u { border-radius: 4px; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-weight: 600; font-size: 11px; position: relative; border: 1px solid rgba(0,0,0,0.08); z-index: 1; }
     .PLAYER { background:#4caf50; color:#fff; }
     .ENEMY { background:#f44336; color:#fff; }
     .NEUTRAL { background:#9e9e9e; color:#fff; }
@@ -33,6 +34,10 @@
   .log-entry.warn { background: #fff8e1; color: #5d4037; border-left-color: #f9a825; }
   .log-entry.error { background: #fde7e7; color: #b71c1c; border-left-color: #d32f2f; }
     .action-btn { padding: 4px 8px; font-size: 12px; }
+
+  /* Move/attack hints */
+  .tile.move { background: #e6f4ea; box-shadow: inset 0 0 0 2px rgba(76,175,80,0.35); }
+  .tile .ring { position:absolute; width:26px; height:26px; border:3px solid #ef5350; border-radius:50%; pointer-events:none; box-shadow: 0 0 6px rgba(239,83,80,0.6); z-index: 2; }
   </style>
 </head>
 <body>
@@ -77,6 +82,8 @@ let SID = null;
 let STATE = null;
 let SELECTED = null;
 let LEGAL_ACTIONS = [];
+let MOVE_HINTS = new Set();
+let ATTACK_HINTS = new Map(); // key: "x,y" => target unit id
 
 async function api(path, opts={}) {
   const r = await fetch(path, {headers:{'content-type':'application/json'}, ...opts});
@@ -113,6 +120,34 @@ function updateUI() {
 
   const endTurnBtn = document.getElementById('end-turn');
   endTurnBtn.disabled = !SID;
+}
+
+async function attemptAction(action) {
+  if (!SID) return false;
+  try {
+    const evalRes = await api(`/sessions/${SID}/evaluate`, {method:'POST', body: JSON.stringify({action})});
+    if (!evalRes.legal) {
+      log(`Action not legal: ${evalRes.explanation}`, 'error');
+  // Clear selection and hints when illegal action happens
+  SELECTED = null;
+  MOVE_HINTS.clear();
+  ATTACK_HINTS.clear();
+  document.querySelectorAll('.tile.selected').forEach(el => el.classList.remove('selected'));
+  updateUI();
+  render();
+      return false;
+    }
+    const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
+    STATE = res.session.mission;
+    log(`Action applied: ${res.explanation}`, 'success');
+    updateUI();
+  await fetchLegalAndComputeHints();
+    render();
+    return true;
+  } catch (e) {
+    log(`Error: ${e.message}`, 'error');
+    return false;
+  }
 }
 
 function showGame() {
@@ -162,6 +197,7 @@ async function refreshSessions() {
           STATE = sess.mission;
           SELECTED = null;
           LEGAL_ACTIONS = [];
+          await fetchLegalAndComputeHints();
           log(`Loaded session ${SID}`);
           updateUI();
           render();
@@ -197,6 +233,7 @@ document.getElementById('new').onclick = async () => {
     LEGAL_ACTIONS = [];
     log(`Session ${SID} created`);
     updateUI();
+  await fetchLegalAndComputeHints();
     render();
   showGame();
   refreshSessions();
@@ -216,6 +253,7 @@ document.getElementById('end-turn').onclick = async () => {
     LEGAL_ACTIONS = [];
   log(`Turn ended: ${res.explanation}`, 'success');
     updateUI();
+  await fetchLegalAndComputeHints();
     render();
   } catch (e) {
     log(`Error: ${e.message}`, 'error');
@@ -225,12 +263,13 @@ document.getElementById('end-turn').onclick = async () => {
 document.getElementById('legal').onclick = async () => {
   if (!SID) return;
   try {
-    const res = await api(`/sessions/${SID}/legal_actions`);
-    LEGAL_ACTIONS = res.actions;
+    if (!SELECTED && STATE?.current_unit_id) SELECTED = STATE.current_unit_id;
+    await fetchLegalAndComputeHints();
+    render();
     console.log('Legal actions:', LEGAL_ACTIONS);
-  log(`Found ${LEGAL_ACTIONS.length} legal actions`);
+    log(`Found ${LEGAL_ACTIONS.length} legal actions`);
   } catch (e) {
-  log(`Error: ${e.message}`, 'error');
+    log(`Error: ${e.message}`, 'error');
   }
 };
 
@@ -262,22 +301,54 @@ function render() {
 
     const dot = document.createElement('div');
     dot.className = 'u ' + u.side + (u.alive ? '' : ' dead');
-    dot.textContent = u.side === 'PLAYER' ? 'P' : 'E';
-    dot.title = `${u.name} (${u.side})\nHP: ${u.stats.base.HP || 0}\nAP: ${u.ap_left}\nPos: ${u.pos[0]},${u.pos[1]}`;
+  const base = (u.stats && u.stats.base) || {};
+  const hp = (base.HP ?? base['HP'] ?? 0);
+    const ap = (u.ap_left ?? 0);
+    dot.innerHTML = `<div style="line-height:1.05; text-align:center;">
+      <div>hp: ${hp}</div>
+      <div>ap: ${ap}</div>
+    </div>`;
+    const allStats = [
+      ['HP', hp],
+      ['AP', (base.AP ?? base['AP'] ?? ap)],
+      ['ATK', (base.ATK ?? base['ATK'] ?? 0)],
+      ['DEF', (base.DEF ?? base['DEF'] ?? 0)],
+      ['MOV', (base.MOV ?? base['MOV'] ?? 0)],
+      ['RNG', (base.RNG ?? base['RNG'] ?? 0)],
+      ['CRIT', (base.CRIT ?? base['CRIT'] ?? 0)],
+    ].map(([k,v]) => `${k}: ${v}`).join('\n');
+    dot.title = `${u.name} (${u.side})\nPos: ${u.pos[0]},${u.pos[1]}\n${allStats}`;
 
-    // Click to select unit
-    dot.onclick = (e) => {
+    // Click behavior:
+    // - If a friendly unit is selected and this is an enemy, try attack (don't change selection).
+    // - If this is an enemy and no selection, do nothing.
+    // - Otherwise, select this (friendly) unit.
+    dot.onclick = async (e) => {
       e.stopPropagation();
       if (!u.alive) return;
 
+      const selectedUnit = SELECTED ? STATE.units[SELECTED] : null;
+      const isEnemy = u.side === 'ENEMY';
+  const isCurrent = STATE.current_unit_id === u.id;
+
+    if (selectedUnit && selectedUnit.alive && selectedUnit.id !== u.id && isEnemy && selectedUnit.id === STATE.current_unit_id) {
+        const action = {kind: 'ATTACK', attacker_id: selectedUnit.id, target_id: u.id};
+        const ok = await attemptAction(action);
+        if (ok) return; // Keep current selection
+        // If illegal, don't select the enemy; just return
+        return;
+      }
+
+  // Select this unit (any side)
       SELECTED = u.id;
       updateUI();
-
-      // Clear previous selections
-      document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+      // Remove previous tile selection and apply to this tile so the full square is highlighted
+      document.querySelectorAll('.tile.selected').forEach(el => el.classList.remove('selected'));
       d.classList.add('selected');
-
       log(`Selected ${u.name}`);
+  // After selecting, compute hints (server for current unit, client preview for others)
+  await fetchLegalAndComputeHints();
+  render();
     };
 
     d.appendChild(dot);
@@ -294,50 +365,140 @@ function render() {
     }
   }
 
+  // Persist selection highlight across renders
+  if (SELECTED && STATE.units[SELECTED]) {
+    const su = STATE.units[SELECTED];
+    const selTile = idx[`${su.pos[0]},${su.pos[1]}`];
+    if (selTile) selTile.classList.add('selected');
+  }
+
+  // Render move/attack hints
+  MOVE_HINTS.forEach(key => {
+    const el = idx[key];
+    if (el) el.classList.add('move');
+  });
+  ATTACK_HINTS.forEach((uid, key) => {
+    const el = idx[key];
+    if (el) {
+      const ring = document.createElement('div');
+      ring.className = 'ring';
+      el.appendChild(ring);
+    }
+  });
+
   // Handle tile clicks for movement/attacks
   g.querySelectorAll('.tile').forEach(tile => {
     tile.onclick = async () => {
-      if (!SID || !SELECTED) return;
+  if (!SID || !SELECTED) return;
 
       const to = [parseInt(tile.dataset.x), parseInt(tile.dataset.y)];
       const selectedUnit = STATE.units[SELECTED];
+  const isCurrentSel = STATE.current_unit_id === selectedUnit.id;
 
       // Check if there's a unit at the target position
       const targetUnit = Object.values(STATE.units).find(u =>
         u.alive && u.pos[0] === to[0] && u.pos[1] === to[1]
       );
 
-      try {
-        let action;
-        if (targetUnit && targetUnit.side !== selectedUnit.side) {
-          // Attack
-          action = {kind: 'ATTACK', attacker_id: SELECTED, target_id: targetUnit.id};
-          log(`Attempting to attack ${targetUnit.name}...`);
-        } else {
-          // Move
-          action = {kind: 'MOVE', unit_id: SELECTED, to: to};
-          log(`Attempting to move to ${to[0]},${to[1]}...`);
-        }
-
-        // Evaluate first
-        const evalRes = await api(`/sessions/${SID}/evaluate`, {method:'POST', body: JSON.stringify({action})});
-        if (!evalRes.legal) {
-          log(`Action not legal: ${evalRes.explanation}`, 'error');
+      let action;
+      if (targetUnit && targetUnit.side !== selectedUnit.side) {
+        if (!isCurrentSel) {
+          log(`Preview: ${selectedUnit.name} could attack ${targetUnit.name} when active.`);
           return;
         }
-
-        // Apply action
-        const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
-        STATE = res.session.mission;
-  log(`Action applied: ${res.explanation}`, 'success');
-        updateUI();
-        render();
-
-      } catch (e) {
-        log(`Error: ${e.message}`, 'error');
+        action = {kind: 'ATTACK', attacker_id: SELECTED, target_id: targetUnit.id};
+        log(`Attempting to attack ${targetUnit.name}...`);
+      } else {
+        if (!isCurrentSel) {
+          log(`Preview: ${selectedUnit.name} could move to ${to[0]},${to[1]} when active.`);
+          return;
+        }
+        action = {kind: 'MOVE', unit_id: SELECTED, to: to};
+        log(`Attempting to move to ${to[0]},${to[1]}...`);
       }
+      await attemptAction(action);
+      // Refresh hints after the action
+      await fetchLegalAndComputeHints();
+      render();
     };
   });
+}
+
+async function fetchLegalAndComputeHints() {
+  MOVE_HINTS.clear();
+  ATTACK_HINTS.clear();
+  if (!SID || !SELECTED) return;
+  const su = STATE.units[SELECTED];
+  if (!su) return;
+
+  if (STATE.current_unit_id === SELECTED) {
+    // Use server-provided legal actions for the active unit
+    try {
+      const res = await api(`/sessions/${SID}/legal_actions`);
+      LEGAL_ACTIONS = res.actions || [];
+    } catch (e) {
+      log(`Error fetching legal actions: ${e.message}`, 'error');
+      return;
+    }
+    for (const entry of LEGAL_ACTIONS) {
+      const a = entry.action || entry;
+      if (a.kind === 'MOVE' && a.unit_id === SELECTED && Array.isArray(a.to)) {
+        MOVE_HINTS.add(`${a.to[0]},${a.to[1]}`);
+      }
+      if (a.kind === 'ATTACK' && a.attacker_id === SELECTED) {
+        const tgt = STATE.units[a.target_id];
+        if (tgt && tgt.alive) ATTACK_HINTS.set(`${tgt.pos[0]},${tgt.pos[1]}`, tgt.id);
+      }
+    }
+  } else {
+    // Client-side preview for non-active units
+    computePreviewHintsForUnit(su);
+  }
+}
+
+function computePreviewHintsForUnit(u) {
+  const w = STATE.map.width, h = STATE.map.height;
+  const terrainAt = (x, y) => (STATE.map.tiles[y] && STATE.map.tiles[y][x]) ? STATE.map.tiles[y][x].terrain : 'PLAIN';
+  const walkable = (x, y) => {
+    const t = terrainAt(x, y);
+    if (t === 'BLOCKED' || t === 'WATER') return false;
+    // occupied?
+    return !Object.values(STATE.units).some(v => v.alive && v.pos[0] === x && v.pos[1] === y);
+  };
+  const inBounds = (x, y) => x >= 0 && x < w && y >= 0 && y < h;
+  const neigh = (x, y) => [[x+1,y],[x-1,y],[x,y+1],[x,y-1]].filter(([nx,ny]) => inBounds(nx,ny));
+
+  const base = (u.stats && u.stats.base) || {};
+  const MOV = (base.MOV ?? base['MOV'] ?? 0);
+  const RNG = (base.RNG ?? base['RNG'] ?? 0);
+
+  // BFS for movement
+  const start = u.pos;
+  const seen = new Set([`${start[0]},${start[1]}`]);
+  const q = [[start[0], start[1], 0]];
+  while (q.length) {
+    const [x, y, d] = q.shift();
+    if (d < MOV) {
+      for (const [nx, ny] of neigh(x, y)) {
+        const key = `${nx},${ny}`;
+        if (seen.has(key)) continue;
+        if (!walkable(nx, ny)) continue;
+        seen.add(key);
+        MOVE_HINTS.add(key);
+        q.push([nx, ny, d+1]);
+      }
+    }
+  }
+
+  // Attack preview: enemies in range by Manhattan distance
+  for (const other of Object.values(STATE.units)) {
+    if (!other.alive || other.id === u.id) continue;
+    if (other.side === u.side) continue;
+    const dist = Math.abs(u.pos[0] - other.pos[0]) + Math.abs(u.pos[1] - other.pos[1]);
+    if (dist <= RNG) {
+      ATTACK_HINTS.set(`${other.pos[0]},${other.pos[1]}`, other.id);
+    }
+  }
 }
 
 // Initialize

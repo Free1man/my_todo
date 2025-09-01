@@ -13,12 +13,17 @@ class TBSSession(BaseModel):
 
 def default_demo_mission() -> Mission:
     width, height = 8, 8
+    # Map terrain: a horizontal river at y==3 with a 2-tile bridge at x==3..4
     tiles = [
-        [ 
-          # river at y==3
-          (Terrain.WATER if y == 3 else Terrain.PLAIN)
-          for x in range(width)
-        ] for y in range(height)
+        [
+            (
+                Terrain.WATER
+                if (y == 3 and x not in (3, 4))  # river except the bridge tiles
+                else Terrain.PLAIN
+            )
+            for x in range(width)
+        ]
+        for y in range(height)
     ]
     grid = MapGrid(
         width=width,
