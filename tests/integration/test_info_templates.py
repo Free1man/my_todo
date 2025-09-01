@@ -10,12 +10,6 @@ def test_ruleset_tbs_info(base_url: str):
     mv_tpl = info["actions"]["move"]["template"]
     assert mv_tpl["type"] == "move" and "unit_id" in mv_tpl and "to" in mv_tpl
 
-def test_ruleset_chess_info(base_url: str):
-    info = _get(f"{base_url}/rulesets/chess/info")
-    assert info["ruleset"] == "chess"
-    mv_tpl = info["actions"]["move"]["template"]
-    assert mv_tpl["type"] == "move" and "src" in mv_tpl and "dst" in mv_tpl
-
 def test_session_info_examples_are_directly_usable(base_url: str):
     s = _post(f"{base_url}/sessions", {"ruleset": "tbs", "map": {"width": 3, "height": 3}})
     i = _get(f"{base_url}/sessions/{s['id']}/info")

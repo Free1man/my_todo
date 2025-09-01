@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "abstract-tactics"
 version = "0.1.0"
-description = "Abstract Tactics backend (TBS + Chess)"
+description = "Abstract Tactics backend (TBS only)"
 authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 package-mode = false

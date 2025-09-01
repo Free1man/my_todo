@@ -5,8 +5,7 @@ const API_BASE = window.location.origin;
 let currentSession = null;
 let currentRuleset = null;
 let currentEvaluation = null; // Store current evaluation result
-let chessSelection = { from: null, moves: new Set() }; // chess selection state
-let aiMoveInProgress = false; // prevent concurrent AI triggers
+// Chess removed
 
 // DOM elements
 let elements = {};
@@ -30,7 +29,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initializeElements() {
     // Index page elements
-    elements.createChessBtn = document.getElementById('create-chess-btn');
     elements.createTbsBtn = document.getElementById('create-tbs-btn');
     elements.loading = document.getElementById('loading');
     elements.gamesContainer = document.getElementById('games-container');
@@ -41,10 +39,7 @@ function initializeElements() {
     elements.gameStatus = document.getElementById('game-status');
     elements.gameBoard = document.getElementById('game-board');
 
-    // Chess uses click-on-board UX now; no dropdowns
-    elements.chessPieceSelect = null;
-    elements.chessMoveSelect = null;
-    elements.submitChessMove = null;
+    // Chess removed
 
     // TBS minimal controls
     elements.endTurnBtn = document.getElementById('end-turn-btn');
@@ -55,7 +50,6 @@ function initializeElements() {
 }
 
 function setupEventListeners() {
-    if (elements.createChessBtn) elements.createChessBtn.addEventListener('click', () => createNewGame('chess'));
     if (elements.createTbsBtn) elements.createTbsBtn.addEventListener('click', () => createNewGame('tbs'));
 
     if (elements.backBtn) {
@@ -76,7 +70,6 @@ function setupEventListeners() {
 
 async function createNewGame(ruleset) {
     elements.loading.style.display = 'block';
-    if (elements.createChessBtn) elements.createChessBtn.disabled = true;
     if (elements.createTbsBtn) elements.createTbsBtn.disabled = true;
 
     try {
@@ -98,7 +91,6 @@ async function createNewGame(ruleset) {
         console.error('Create game error:', error);
     } finally {
         elements.loading.style.display = 'none';
-        if (elements.createChessBtn) elements.createChessBtn.disabled = false;
         if (elements.createTbsBtn) elements.createTbsBtn.disabled = false;
     }
 }
@@ -149,10 +141,7 @@ async function loadGameSession(sessionId) {
 
         displayGameSession();
 
-        // If it's a chess game and black's turn, trigger AI move
-        if (currentRuleset === 'chess' && currentSession?.state?.turn === 'black' && !currentSession?.state?.winner) {
-            await maybeTriggerBlackAI();
-        }
+    // Chess AI removed
 
     } catch (error) {
         showErrorMessage(`Failed to load game: ${error.message}`);
@@ -175,10 +164,7 @@ function displayGameSession() {
     `;
 
     // Show appropriate controls
-    if (currentRuleset === 'chess') {
-        const tbsEl = document.getElementById('tbs-controls');
-        if (tbsEl) tbsEl.style.display = 'none';
-    } else if (currentRuleset === 'tbs') {
+    if (currentRuleset === 'tbs') {
         const tbsEl = document.getElementById('tbs-controls');
         if (tbsEl) tbsEl.style.display = 'block';
     // Auto-select active unit and highlight options
@@ -289,126 +275,16 @@ function displayGameBoard() {
 
     let boardHtml = '';
 
-    if (currentRuleset === 'chess' && currentSession.state.board) {
-        boardHtml = displayChessBoard(currentSession.state.board);
-    } else if (currentRuleset === 'tbs') {
+    if (currentRuleset === 'tbs') {
         boardHtml = displayTbsBoard(currentSession.state);
     }
 
     elements.gameBoard.innerHTML = boardHtml;
 
-    // Chess click handlers
-    if (currentRuleset === 'chess') {
-        clearChessHighlights();
-        elements.gameBoard.querySelectorAll('.chess-board .sq').forEach(el => {
-            const sq = el.getAttribute('data-square');
-            if (!sq) return;
-            el.addEventListener('click', () => handleChessSquareClick(sq));
-        });
-    }
+    // No chess handlers
 }
 
-function displayChessBoard(board) {
-    let html = '<div class="chess-board">';
-    html += '<div class="chess-grid">';
-    for (let rank = 8; rank >= 1; rank--) {
-        for (let file = 0; file < 8; file++) {
-            const square = String.fromCharCode(97 + file) + rank;
-            const piece = board[square];
-            const isLight = (file + rank) % 2 === 0;
-            const sqCls = `sq ${isLight ? 'light' : 'dark'}`;
-            const glyph = (piece && piece.type && piece.color) ? getChessPieceSymbol(`${piece.color}_${piece.type}`) : '';
-            html += `<div class="${sqCls}" data-square="${square}" title="${square}">` +
-                    (glyph ? `<span class="glyph">${glyph}</span>` : '') + `</div>`;
-        }
-    }
-    html += '</div></div>';
-    return html;
-}
-
-// Chess click-to-move implementation
-function clearChessHighlights() {
-    const boardEl = elements.gameBoard;
-    if (!boardEl) return;
-    boardEl.querySelectorAll('.sq.selected,.sq.highlight-move,.sq.highlight-capture')
-        .forEach(el => el.classList.remove('selected','highlight-move','highlight-capture'));
-    chessSelection = { from: null, moves: new Set() };
-}
-
-async function handleChessSquareClick(square) {
-    if (!currentSession || currentRuleset !== 'chess') return;
-    const state = currentSession.state;
-    if (!state || state.winner) {
-        if (state && state.winner) showErrorMessage(`Game is over! Winner: ${state.winner}`);
-        return;
-    }
-
-    // Move if clicking on a highlighted destination
-    if (chessSelection.from && chessSelection.moves.has(square)) {
-        const action = { type: 'move', src: chessSelection.from, dst: square };
-        clearChessHighlights();
-        await submitAction(action);
-        return;
-    }
-
-    const board = state.board || {};
-    const clickedPiece = board[square];
-    const toMove = state.turn || 'white';
-    if (!clickedPiece || clickedPiece.color !== toMove) {
-        // Deselect if clicking empty or opponent piece
-        clearChessHighlights();
-        return;
-    }
-
-    // Select the piece and evaluate legal moves by probing the API
-    clearChessHighlights();
-    chessSelection.from = square;
-    const selectedEl = document.querySelector(`[data-square="${square}"]`);
-    if (selectedEl) selectedEl.classList.add('selected');
-
-    const files = 'abcdefgh';
-    const ranks = '12345678';
-    const legalMoves = new Set();
-
-    const evals = [];
-    for (const f of files) {
-        for (const r of ranks) {
-            const dst = f + r;
-            if (dst === square) continue;
-            evals.push(
-                fetch(`${API_BASE}/sessions/${currentSession.id}/evaluate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'move', src: square, dst })
-                })
-                .then(res => res.ok ? res.json() : null)
-                .then(data => { if (data && data.ok) legalMoves.add(dst); })
-                .catch(() => {})
-            );
-        }
-    }
-
-    await Promise.all(evals);
-    chessSelection.moves = legalMoves;
-
-    // Highlight squares
-    legalMoves.forEach(dst => {
-    const el = document.querySelector(`[data-square="${dst}"]`);
-        if (!el) return;
-    if (board[dst]) el.classList.add('highlight-capture');
-    else el.classList.add('highlight-move');
-    });
-}
-
-function getChessPieceSymbol(piece) {
-    const symbols = {
-        'white_king': '♔', 'white_queen': '♕', 'white_rook': '♖',
-        'white_bishop': '♗', 'white_knight': '♘', 'white_pawn': '♙',
-        'black_king': '♚', 'black_queen': '♛', 'black_rook': '♜',
-        'black_bishop': '♝', 'black_knight': '♞', 'black_pawn': '♟'
-    };
-    return symbols[piece] || '?';
-}
+// Chess functions removed
 
 function displayTbsBoard(state) {
     if (!state.map) return '<p>No map data available</p>';
@@ -451,39 +327,7 @@ function displayTbsBoard(state) {
     return html;
 }
 
-async function submitChessMove() {
-    const fromSquare = elements.chessPieceSelect.value;
-    const toSquare = elements.chessMoveSelect.value;
-
-    if (!fromSquare) {
-        showErrorMessage('Please select a piece first');
-        return;
-    }
-
-    if (!toSquare) {
-        showErrorMessage('Please select a destination');
-        return;
-    }
-
-    // Check if game is over
-    if (currentSession.state.winner) {
-        showErrorMessage(`Game is over! Winner: ${currentSession.state.winner}`);
-        return;
-    }
-
-    // Parse the move selection - it should be in format "e2e4"
-    // But we need to send src and dst separately
-    const src = fromSquare;
-    const dst = toSquare;
-
-    const action = {
-        type: 'move',
-        src: src,
-        dst: dst
-    };
-
-    await submitAction(action);
-}
+// submitChessMove removed
 
 async function submitTbsAction() {
     const actionType = elements.tbsActionType.value;
@@ -599,10 +443,7 @@ async function submitAction(action) {
             } catch (e) { console.warn('auto end turn', e); }
         }
 
-        // After a successful player move in chess, trigger AI if it's now black's turn
-        if (currentRuleset === 'chess' && currentSession?.state?.turn === 'black' && !currentSession?.state?.winner) {
-            await maybeTriggerBlackAI();
-        }
+    // No chess AI
 
     // Clear form inputs
     if (currentRuleset === 'tbs') {
@@ -623,72 +464,11 @@ async function submitAction(action) {
     }
 }
 
-async function maybeTriggerBlackAI() {
-    if (aiMoveInProgress) return;
-    if (!currentSession || currentRuleset !== 'chess') return;
-    if (currentSession.state?.turn !== 'black' || currentSession.state?.winner) return;
-
-    aiMoveInProgress = true;
-    try {
-        // 1) Get FEN for current session from the UI-oriented endpoint
-        const stateRes = await fetch(`${API_BASE}/sessions/${currentSession.id}/state`);
-        if (!stateRes.ok) {
-            console.warn('Failed to fetch session state for FEN', stateRes.status);
-            return;
-        }
-        const uiState = await stateRes.json();
-        const fen = uiState?.fen;
-        if (!fen) {
-            console.warn('No FEN available from state endpoint');
-            return;
-        }
-
-        // 2) Ask AI for best move using FEN
-        const aiRes = await fetch(`${API_BASE}/chess/ai/next`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fen })
-        });
-        if (!aiRes.ok) {
-            console.warn('AI move request failed', aiRes.status);
-            return;
-        }
-        const aiData = await aiRes.json();
-        const uci = aiData?.uci;
-        if (!uci || uci.length < 4) {
-            console.warn('AI returned no move');
-            return;
-        }
-
-        // 3) Apply returned UCI via normal action endpoint
-        const src = uci.slice(0,2).toLowerCase();
-        const dst = uci.slice(2,4).toLowerCase();
-        let promotion = null;
-        if (uci.length > 4) {
-            const m = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
-            promotion = m[uci[4].toLowerCase()] || null;
-        }
-        const applyRes = await fetch(`${API_BASE}/sessions/${currentSession.id}/action`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'move', src, dst, promotion })
-        });
-        if (!applyRes.ok) {
-            console.warn('Failed to apply AI move', applyRes.status);
-            return;
-        }
-        currentSession = await applyRes.json();
-        displayGameSession();
-    } catch (e) {
-        console.warn('AI move request error', e);
-    } finally {
-        aiMoveInProgress = false;
-    }
-}
+// Chess AI removed
 
 // Removed old TBS dropdown flows; board is fully click-driven now.
 
-function populateUnitDropdowns() { /* no-op for TBS now */ }
+function populateUnitDropdowns() { /* no-op for TBS */ }
 
 
 async function onTbsUnitSelected() {

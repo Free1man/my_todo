@@ -1,3 +1,7 @@
-# Importing registers both rulesets via side effects.
+"""Ruleset registrations.
+
+Importing a ruleset module registers it via side effects.
+Only TBS is kept in this trimmed build.
+"""
+
 from .tbs.ruleset import ruleset as tbs_ruleset  # noqa: F401
-from .chess.ruleset import ruleset as chess_ruleset  # noqa: F401

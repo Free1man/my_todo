@@ -1,12 +1,12 @@
-# Abstract Tactics - Chess & TBS Game Platform
+# Abstract Tactics - TBS Game Platform
 
-A complete turn-based tactics platform with backend API and web UI for playing Chess and Turn-Based Strategy (TBS) games.
+A minimal turn-based tactics platform with backend API and web UI for a Turn-Based Strategy (TBS) ruleset.
 
 ## Features
 
 - **Web UI**: Minimal, responsive interface for game selection and play
 - **API Backend**: FastAPI with async endpoints and detailed explanations
-- **Game Rulesets**: Chess and TBS with extensible architecture
+- **Game Rulesets**: TBS with extensible architecture
 - **Session Management**: Redis-backed persistence (with memory fallback)
 - **Docker Support**: Complete containerized setup
 
@@ -34,12 +34,8 @@ poetry run uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
 
 ## Web UI Features
 
-- **Game Selection**: Choose between Chess and TBS games
-- **Game Creation**: Start new games with default settings
-- **Interactive Play**:
-  - Chess: Enter moves in algebraic notation (e.g., `e2e4`)
-  - TBS: Select actions with unit/target inputs
-- **Visual Boards**: Text-based game board representations
+- **Game Creation**: Start new TBS games with default settings
+- **Interactive Play**: Click-driven grid with move/attack/end turn
 - **Session Persistence**: Save and resume games
 
 ## API Endpoints
@@ -54,10 +50,6 @@ poetry run uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
 - `POST /sessions/{id}/action` - Apply game action
 
 ## Game Rules
-
-### Chess
-- Standard chess rules with algebraic notation input
-- Full game state tracking and validation
 
 ### TBS (Turn-Based Strategy)
 - Grid-based tactical combat
