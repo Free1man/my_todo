@@ -5,7 +5,6 @@ const API_BASE = window.location.origin;
 let currentSession = null;
 let currentRuleset = null;
 let currentEvaluation = null; // Store current evaluation result
-// Chess removed
 
 // DOM elements
 let elements = {};
@@ -39,8 +38,6 @@ function initializeElements() {
     elements.gameStatus = document.getElementById('game-status');
     elements.gameBoard = document.getElementById('game-board');
 
-    // Chess removed
-
     // TBS minimal controls
     elements.endTurnBtn = document.getElementById('end-turn-btn');
 
@@ -57,8 +54,6 @@ function setupEventListeners() {
             window.location.href = 'index.html';
         });
     }
-
-    // Chess: no submit button; actions are driven by board clicks
 
     // TBS: End Turn
     if (elements.endTurnBtn) {
@@ -140,8 +135,6 @@ async function loadGameSession(sessionId) {
         currentRuleset = currentSession.ruleset;
 
         displayGameSession();
-
-    // Chess AI removed
 
     } catch (error) {
         showErrorMessage(`Failed to load game: ${error.message}`);
@@ -280,11 +273,7 @@ function displayGameBoard() {
     }
 
     elements.gameBoard.innerHTML = boardHtml;
-
-    // No chess handlers
 }
-
-// Chess functions removed
 
 function displayTbsBoard(state) {
     if (!state.map) return '<p>No map data available</p>';
@@ -326,8 +315,6 @@ function displayTbsBoard(state) {
     html += '</div>';
     return html;
 }
-
-// submitChessMove removed
 
 async function submitTbsAction() {
     const actionType = elements.tbsActionType.value;
@@ -443,9 +430,7 @@ async function submitAction(action) {
             } catch (e) { console.warn('auto end turn', e); }
         }
 
-    // No chess AI
-
-    // Clear form inputs
+        // Clear form inputs
     if (currentRuleset === 'tbs') {
             // Only clear unit select if it's visible (not for end_turn)
             if (elements.tbsActionType.value !== 'end_turn') {
@@ -463,8 +448,6 @@ async function submitAction(action) {
         showErrorMessage('Network error occurred');
     }
 }
-
-// Chess AI removed
 
 // Removed old TBS dropdown flows; board is fully click-driven now.
 
