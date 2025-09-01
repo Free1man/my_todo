@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel
-from typing import List, Optional, Tuple, Literal, Dict, Any
+from typing import List, Optional, Tuple, Literal
 
 from .common import Mission
 
@@ -29,14 +29,8 @@ class EndTurnAction(BaseModel):
 Action = MoveAction | AttackAction | UseSkillAction | EndTurnAction
 
 # ----- API IO -----
-
-class RulesetsView(BaseModel):
-    rulesets: List[str]
-
 class CreateSessionRequest(BaseModel):
-    ruleset: str = "tbs"
     mission: Optional[Mission] = None
-    state: Optional[Dict[str, Any]] = None
 
 class SessionView(BaseModel):
     id: str

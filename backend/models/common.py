@@ -80,8 +80,8 @@ class Skill(BaseModel):
     passive_mods: List[StatModifier] = Field(default_factory=list)
 
 class Item(BaseModel):
-    id: str
-    name: str
+    id: str = "item.example"
+    name: str = "Item"
     mods: List[StatModifier] = Field(default_factory=list)
 
 class Injury(BaseModel):
@@ -115,11 +115,19 @@ class MapGrid(BaseModel):
         return self.tiles[y][x]
 
 class Unit(BaseModel):
-    id: str
-    side: Side
-    name: str
-    pos: Coord
-    stats: StatBlock
+    id: str = "unit.example"
+    side: Side = Side.PLAYER
+    name: str = "Unit"
+    pos: Coord = (0, 0)
+    stats: StatBlock = Field(default_factory=lambda: StatBlock(base={
+        StatName.HP: 10,
+        StatName.AP: 2,
+        StatName.ATK: 3,
+        StatName.DEF: 1,
+        StatName.MOV: 4,
+        StatName.RNG: 1,
+        StatName.CRIT: 5,
+    }))
     items: List[Item] = Field(default_factory=list)
     injuries: List[Injury] = Field(default_factory=list)
     auras: List[Aura] = Field(default_factory=list)

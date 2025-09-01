@@ -4,6 +4,66 @@ import json
 import pytest
 import requests
 
+# Build a Mission payload (new typed API) from the lightweight state dict used in tests
+def _mission_from_state(info: dict, state: dict) -> dict:
+    width = state["map"]["width"]
+    height = state["map"]["height"]
+    # tiles: default PLAIN with optional BLOCKED from obstacles
+    obstacles = { (o["x"], o["y"]) for o in state["map"].get("obstacles", []) }
+    tiles = [[{"terrain": ("BLOCKED" if (x, y) in obstacles else "PLAIN"), "mods": []}
+              for x in range(width)] for y in range(height)]
+
+    # items
+    items = {}
+    for iid, it in (state.get("items") or {}).items():
+        mods = []
+        if it.get("attack_bonus"):
+            mods.append({"stat": "ATK", "operation": "ADDITIVE", "value": it["attack_bonus"]})
+        if it.get("defense_bonus"):
+            mods.append({"stat": "DEF", "operation": "ADDITIVE", "value": it["defense_bonus"]})
+        if it.get("range_bonus"):
+            mods.append({"stat": "RNG", "operation": "ADDITIVE", "value": it["range_bonus"]})
+        items[iid] = {"id": iid, "name": it.get("name", iid), "mods": mods}
+
+    # units
+    units = {}
+    for uid, u in (state.get("units") or {}).items():
+        units[uid] = {
+            "id": uid,
+            "side": ("PLAYER" if u.get("side") == "A" else "ENEMY"),
+            "name": u.get("name", uid),
+            "pos": [u["pos"]["x"], u["pos"]["y"]],
+            "stats": {"base": {
+                "HP": u.get("hp", 10),
+                "AP": u.get("ap", 2),
+                "ATK": u.get("strength", 3),
+                "DEF": u.get("defense", 1),
+                "MOV": 4, "RNG": 1, "CRIT": 5
+            }},
+            "items": [items[iid] for iid in u.get("item_ids", []) if iid in items],
+            "injuries": [], "auras": [], "skills": [],
+            "alive": u.get("hp", 10) > 0, "ap_left": u.get("ap", 2),
+        }
+
+    order = state.get("turn_order") or list(units.keys())
+    active_index = state.get("active_index", 0)
+    current_uid = order[active_index] if order else None
+    side_to_move = "PLAYER" if state.get("active_side") == "A" else "ENEMY"
+
+    mission = {
+        "id": "m.from_state",
+        "name": "From Tests",
+        "map": {"width": width, "height": height, "tiles": tiles},
+        "units": units,
+        "side_to_move": side_to_move,
+        "turn": state.get("turn_number", 1),
+        "goals": [], "pre_events": [], "post_events": [], "global_mods": [],
+        "current_unit_id": current_uid,
+        "unit_order": order,
+        "current_unit_index": active_index,
+    }
+    return mission
+
 # ---------- HTTP helpers (show server error bodies) ----------
 def _post(url: str, payload: dict, *, timeout=5) -> dict:
     r = requests.post(url, json=payload, timeout=timeout)
@@ -29,17 +89,17 @@ def _session_get(base_url: str, sid: str) -> dict:
     return _get(f"{base_url}/sessions/{sid}")
 
 # ---------- info/templates ----------
-def _tbs_info(base_url: str) -> dict:
-    return _get(f"{base_url}/rulesets/tbs/info")
+def _defaults_info(base_url: str) -> dict:
+    return _get(f"{base_url}/info")
 
-def _unit_tpl(info: dict) -> dict:
-    return copy.deepcopy(info["models"]["unit"]["template"])
+def _unit_example(info: dict) -> dict:
+    return copy.deepcopy(info["models"]["unit"]["example"])
 
-def _item_tpl(info: dict) -> dict:
-    return copy.deepcopy(info["models"]["item"]["template"])
+def _item_example(info: dict) -> dict:
+    return copy.deepcopy(info["models"]["item"]["example"])
 
-def _attack_tpl(info: dict) -> dict:
-    return copy.deepcopy(info["actions"]["attack"]["template"])  # {"type":"attack","attacker_id":"","target_id":""}
+def _attack_example(info: dict) -> dict:
+    return copy.deepcopy(info["actions"]["attack"]["example"])  # {"kind":"ATTACK","attacker_id":"","target_id":""}
 
 # ---------- tiny state builders (only tweak what’s under test) ----------
 def _fresh_state_3x3() -> dict:
@@ -58,7 +118,7 @@ def _fresh_state_3x3() -> dict:
     }
 
 def _add_unit(st: dict, info: dict, *, uid: str, side: str, x: int, y: int, **overrides) -> None:
-    u = _unit_tpl(info)
+    u = _unit_example(info)
     u["id"] = uid
     u["side"] = side
     u["pos"] = {"x": x, "y": y}
@@ -68,7 +128,7 @@ def _add_unit(st: dict, info: dict, *, uid: str, side: str, x: int, y: int, **ov
     st["turn_order"].append(uid)
 
 def _add_item(st: dict, info: dict, *, iid: str, **overrides) -> None:
-    it = _item_tpl(info)
+    it = _item_example(info)
     it["id"] = iid
     for k, v in overrides.items():
         it[k] = v
@@ -84,13 +144,10 @@ def _hp_of(sess_json: dict, uid: str) -> int:
     return u["stats"]["base"]["HP"]
 
 def _create_tbs_session_with_state(base_url: str, state: dict) -> tuple[str, dict]:
-    """
-    Create a TBS session with a custom initial State using the backend's expected shape:
-      {"ruleset":"tbs","state": <state>}
-    Then re-fetch and assert our unit IDs are present (so later tests don't KeyError).
-    """
+    """Create a TBS session using new typed Mission built from compact test state."""
     desired_ids = set((state.get("units") or {}).keys())
-    body = {"ruleset": "tbs", "state": state}
+    mission = _mission_from_state(_defaults_info(base_url), state)
+    body = {"mission": mission}
 
     sess = _post(f"{base_url}/sessions", body)
     sid = sess["id"]
@@ -148,12 +205,12 @@ def _make_state_for_ranged_gap(info: dict) -> dict:
 
 # ---------- tests ----------
 def test_melee_adjacent_attack_applies_damage(base_url: str):
-    info = _tbs_info(base_url)
+    info = _defaults_info(base_url)
     state = _make_state_for_adjacent_melee(info)
 
     sid, sess = _create_tbs_session_with_state(base_url, state)
 
-    atk = _attack_tpl(info)
+    atk = _attack_example(info)
     atk["attacker_id"] = "A1"
     atk["target_id"]   = "B1"
 
@@ -168,12 +225,12 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
     assert hp_after == 5, f"expected B1 HP=5, got {hp_after}"
 
 def test_melee_out_of_range_attack_rejected(base_url: str):
-    info = _tbs_info(base_url)
+    info = _defaults_info(base_url)
     state = _make_state_for_out_of_range(info)
 
     sid, sess = _create_tbs_session_with_state(base_url, state)
 
-    atk = _attack_tpl(info)
+    atk = _attack_example(info)
     atk["attacker_id"] = "A2"
     atk["target_id"]   = "B2"
 
@@ -184,13 +241,13 @@ def test_melee_out_of_range_attack_rejected(base_url: str):
         _apply(base_url, sid, atk)
 
 def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
-    info = _tbs_info(base_url)
+    info = _defaults_info(base_url)
     state = _make_state_for_ranged_gap(info)
 
     sid, sess = _create_tbs_session_with_state(base_url, state)
 
     # melee should fail
-    atk_fail = _attack_tpl(info)
+    atk_fail = _attack_example(info)
     atk_fail["attacker_id"] = "A3"
     atk_fail["target_id"]   = "B3"
     ex = _evaluate(base_url, sid, atk_fail)
@@ -199,7 +256,7 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
         _apply(base_url, sid, atk_fail)
 
     # ranged should succeed
-    atk_ok = _attack_tpl(info)
+    atk_ok = _attack_example(info)
     atk_ok["attacker_id"] = "B3"
     atk_ok["target_id"]   = "A3"
     ex2 = _evaluate(base_url, sid, atk_ok)
