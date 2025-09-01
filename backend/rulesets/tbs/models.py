@@ -13,24 +13,24 @@ class Grid(BaseModel):
 
 
 class Item(BaseModel):
-    id: str
-    name: str
+    id: str = "item1"
+    name: str = "Basic Item"
     attack_bonus: int = 0
     defense_bonus: int = 0
     range_bonus: int = 0
 
 
 class Unit(BaseModel):
-    id: str
-    side: str
-    name: str
+    id: str = "unit1"
+    side: Literal["A","B"] = "A"
+    name: str = "Warrior"
     strength: int = 3
     defense: int = 1
     max_hp: int = 10
     hp: int = 10
     max_ap: int = 2
     ap: int = 2
-    pos: Pos
+    pos: Pos = Pos(x=0, y=0)
     item_ids: List[str] = Field(default_factory=list)
 
     def total_attack(self, items: Dict[str, Item]) -> int:

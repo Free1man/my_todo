@@ -25,3 +25,9 @@ def evaluate(st: State, raw: Dict[str, Any]) -> Explanation:
 
 def apply(st: State, raw: Dict[str, Any]) -> Dict[str, Any]:
     p = parse(raw); return apply_move(st, p.src, p.dst, p.promotion)
+
+
+# --- Action specifications for templates and schemas ---
+ACTION_SPECS = {
+    "move": MovePayload,
+}

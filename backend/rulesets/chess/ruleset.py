@@ -3,13 +3,14 @@ from typing import Any, Dict
 from backend.core.ruleset_registry import register_ruleset
 from backend.core.primitives import Explanation, IGameState
 from backend.core import scheduling
-from .models import State
+from backend.core.info_builder import InfoMixin
+from .models import State, Piece, Board
 from . import actions as acts
 from . import factory as fac
 from . import rules as rules
 
 
-class _Ruleset:
+class _Ruleset(InfoMixin):
     name = "chess"
     default_scheduler = scheduling.SIDE_TO_MOVE
 
@@ -28,6 +29,15 @@ class _Ruleset:
     def summarize(self, state: IGameState) -> Dict[str, Any]:
         st = State.model_validate(state.to_serializable())
         return rules.summarize(st)
+
+    def info(self, state: IGameState | None = None):
+        self.ACTION_SPECS = acts.ACTION_SPECS
+        # chess examples are trivial
+        self.build_examples = lambda st: {
+            "move": {"type":"move","src":"e2","dst":"e4"}
+        }
+        # no extra model_specs needed unless you want to expose FEN etc.
+        return self.default_info(state)
 
 
 ruleset = register_ruleset(_Ruleset())

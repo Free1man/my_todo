@@ -126,3 +126,11 @@ def evaluate(st: State, raw: Dict[str, Any]) -> Explanation:
 
 def apply(st: State, raw: Dict[str, Any]) -> Dict[str, Any]:
     p = parse(raw); return _HANDLERS[p.type].apply(st, p)
+
+
+# --- Action specifications for templates and schemas ---
+ACTION_SPECS = {
+    "move": MovePayload,
+    "attack": AttackPayload,
+    "end_turn": EndTurnPayload,
+}

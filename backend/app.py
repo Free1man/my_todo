@@ -117,5 +117,29 @@ async def apply_action(sid: str, raw: Dict[str, Any] = Body(...)) -> Session:
     await store_set(s)
     return s
 
+
+@app.get("/rulesets/{ruleset}/info")
+async def ruleset_info(ruleset: str):
+    """Get schemas, templates, and examples for a ruleset."""
+    rs = get_ruleset(ruleset)
+    if not rs:
+        raise HTTPException(status_code=404, detail="unknown ruleset")
+    if not hasattr(rs, "info"):
+        raise HTTPException(status_code=501, detail="ruleset doesn't expose info()")
+    return rs.info(None)
+
+
+@app.get("/sessions/{sid}/info")
+async def session_info(sid: str):
+    """Get schemas, templates, and examples for a specific session."""
+    s = await store_get(sid)
+    if not s:
+        raise HTTPException(status_code=404, detail="session not found")
+    rs = get_ruleset(s.ruleset)
+    if not rs or not hasattr(rs, "info"):
+        raise HTTPException(status_code=400, detail="ruleset not found or no info()")
+    return rs.info(rs.create(s.state))
+
+
 # Mount static files (after all API routes to avoid conflicts)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
