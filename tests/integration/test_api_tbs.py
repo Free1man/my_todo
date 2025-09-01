@@ -1,6 +1,6 @@
 # tests/integration/test_api_tbs.py
-import json
 import copy
+import json
 import pytest
 import requests
 
@@ -25,15 +25,12 @@ def _get(url: str, *, timeout=5) -> dict:
     r.raise_for_status()
     return r.json()
 
+def _session_get(base_url: str, sid: str) -> dict:
+    return _get(f"{base_url}/sessions/{sid}")
+
 # ---------- info/templates ----------
 def _tbs_info(base_url: str) -> dict:
-    """Ruleset-level info with action/model templates."""
     return _get(f"{base_url}/rulesets/tbs/info")
-
-def _attack_tpl(info: dict) -> dict:
-    """Canonical attack payload from info endpoint."""
-    # expected: {"type":"attack","attacker_id":"...","target_id":"..."}
-    return copy.deepcopy(info["actions"]["attack"]["template"])
 
 def _unit_tpl(info: dict) -> dict:
     return copy.deepcopy(info["models"]["unit"]["template"])
@@ -41,145 +38,122 @@ def _unit_tpl(info: dict) -> dict:
 def _item_tpl(info: dict) -> dict:
     return copy.deepcopy(info["models"]["item"]["template"])
 
-# ---------- session creation using model templates ----------
-def _make_state_for_adjacent_melee(info: dict):
-    """Two adjacent melee units; A hits B for 5 dmg (10 -> 5)."""
-    unit = _unit_tpl(info)
+def _attack_tpl(info: dict) -> dict:
+    return copy.deepcopy(info["actions"]["attack"]["template"])  # {"type":"attack","attacker_id":"","target_id":""}
 
-    A = copy.deepcopy(unit)
-    A["id"] = "A1"; A["side"] = "A"; A["name"] = "MeleeA"
-    A["strength"] = 5; A["defense"] = 0
-    A["max_hp"] = 10; A["hp"] = 10
-    A["max_ap"] = 2;  A["ap"] = 2
-    A["pos"] = {"x": 1, "y": 1}
-    A["item_ids"] = []
-
-    B = copy.deepcopy(unit)
-    B["id"] = "B1"; B["side"] = "B"; B["name"] = "TargetB"
-    B["strength"] = 3; B["defense"] = 0
-    B["max_hp"] = 10; B["hp"] = 10
-    B["max_ap"] = 2;  B["ap"] = 2
-    B["pos"] = {"x": 1, "y": 2}
-    B["item_ids"] = []
-
-    state = {
+# ---------- tiny state builders (only tweak what’s under test) ----------
+def _fresh_state_3x3() -> dict:
+    # minimal shell; let model defaults fill the rest server-side
+    return {
         "map": {"width": 3, "height": 3, "obstacles": []},
         "items": {},
-        "units": {"A1": A, "B1": B},
-        "turn_order": ["A1", "B1"],
+        "units": {},
+        "turn_order": [],
         "active_index": 0,
-        "turn_mode": "unit",
+        "turn_number": 1,
         "status": "ongoing",
+        "winner": None,
+        "turn_mode": "unit",
         "active_side": "A",
     }
-    return state
 
-def _make_state_for_out_of_range(info: dict):
-    """Two melee units far apart; attack must be illegal."""
-    unit = _unit_tpl(info)
+def _add_unit(st: dict, info: dict, *, uid: str, side: str, x: int, y: int, **overrides) -> None:
+    u = _unit_tpl(info)
+    u["id"] = uid
+    u["side"] = side
+    u["pos"] = {"x": x, "y": y}
+    for k, v in overrides.items():
+        u[k] = v
+    st["units"][uid] = u
+    st["turn_order"].append(uid)
 
-    A = copy.deepcopy(unit)
-    A["id"] = "A2"; A["side"] = "A"; A["name"] = "MeleeA"
-    A["strength"] = 5; A["defense"] = 0
-    A["max_hp"] = 10; A["hp"] = 10
-    A["max_ap"] = 2;  A["ap"] = 2
-    A["pos"] = {"x": 0, "y": 0}
-    A["item_ids"] = []                       # range = 1
+def _add_item(st: dict, info: dict, *, iid: str, **overrides) -> None:
+    it = _item_tpl(info)
+    it["id"] = iid
+    for k, v in overrides.items():
+        it[k] = v
+    st["items"][iid] = it
 
-    B = copy.deepcopy(unit)
-    B["id"] = "B2"; B["side"] = "B"; B["name"] = "MeleeB"
-    B["strength"] = 3; B["defense"] = 0
-    B["max_hp"] = 10; B["hp"] = 10
-    B["max_ap"] = 2;  B["ap"] = 2
-    B["pos"] = {"x": 2, "y": 2}
-    B["item_ids"] = []                       # range = 1
-
-    state = {
-        "map": {"width": 3, "height": 3, "obstacles": []},
-        "items": {},
-        "units": {"A2": A, "B2": B},
-        "turn_order": ["A2", "B2"],
-        "active_index": 0,
-        "turn_mode": "unit",
-        "status": "ongoing",
-        "active_side": "A",
-    }
-    return state
-
-def _make_state_for_ranged_gap(info: dict):
-    """
-    Column 0: (0,0)=A3 melee, (0,1)=empty, (0,2)=B3 archer (range 2 via range_bonus=1).
-    """
-    unit = _unit_tpl(info)
-    item = _item_tpl(info)
-
-    # Archer item: base range 1 + 1 bonus = 2
-    bow = copy.deepcopy(item)
-    bow["id"] = "bow1"
-    bow["name"] = "Bow"
-    bow["attack_bonus"] = 0
-    bow["defense_bonus"] = 0
-    bow["range_bonus"] = 1
-
-    A = copy.deepcopy(unit)
-    A["id"] = "A3"; A["side"] = "A"; A["name"] = "MeleeA"
-    A["strength"] = 4; A["defense"] = 0
-    A["max_hp"] = 10; A["hp"] = 10
-    A["max_ap"] = 2;  A["ap"] = 2
-    A["pos"] = {"x": 0, "y": 0}
-    A["item_ids"] = []                       # melee only
-
-    B = copy.deepcopy(unit)
-    B["id"] = "B3"; B["side"] = "B"; B["name"] = "ArcherB"
-    B["strength"] = 3; B["defense"] = 0
-    B["max_hp"] = 10; B["hp"] = 10
-    B["max_ap"] = 2;  B["ap"] = 2
-    B["pos"] = {"x": 0, "y": 2}
-    B["item_ids"] = ["bow1"]                 # gets +1 range
-
-    state = {
-        "map": {"width": 3, "height": 3, "obstacles": []},
-        "items": {"bow1": bow},
-        "units": {"A3": A, "B3": B},
-        "turn_order": ["A3", "B3"],
-        "active_index": 0,
-        "turn_mode": "unit",
-        "status": "ongoing",
-        "active_side": "A",
-    }
-    return state
-
-# ---------- tiny state readers ----------
-def _units_by_id(sess_json: dict) -> dict[str, dict]:
-    state = sess_json.get("state", {})
-    units = state.get("units", {})
-    if isinstance(units, list):
-        return {u["id"]: u for u in units}
-    return units
+# ---------- verify/create helpers ----------
+def _units_by_id(sess_json: dict) -> dict:
+    state = sess_json.get("state") or {}
+    units = state.get("units") or {}
+    return {u["id"]: u for u in units} if isinstance(units, list) else units
 
 def _hp_of(sess_json: dict, uid: str) -> int:
     u = _units_by_id(sess_json)[uid]
-    return u["hp"]["current"] if isinstance(u.get("hp"), dict) else u["hp"]
+    hp = u.get("hp")
+    return hp["current"] if isinstance(hp, dict) else hp
 
-# ---------- simple evaluate/apply wrappers ----------
+def _create_tbs_session_with_state(base_url: str, state: dict) -> tuple[str, dict]:
+    """
+    Create a TBS session with a custom initial State using the backend's expected shape:
+      {"ruleset":"tbs","state": <state>}
+    Then re-fetch and assert our unit IDs are present (so later tests don't KeyError).
+    """
+    desired_ids = set((state.get("units") or {}).keys())
+    body = {"ruleset": "tbs", "state": state}
+
+    sess = _post(f"{base_url}/sessions", body)
+    sid = sess["id"]
+
+    # fetch authoritative state after create
+    sess = _get(f"{base_url}/sessions/{sid}")
+    present_ids = set(_units_by_id(sess).keys())
+
+    # sanity check: ensure server actually used our state
+    if desired_ids and not desired_ids.issubset(present_ids):
+        raise AssertionError(
+            "Server did not accept the custom TBS State.\n"
+            f"Wanted unit IDs: {sorted(desired_ids)}\n"
+            f"Got unit IDs:    {sorted(present_ids)}\n"
+            "The backend may be using quickstart() instead of the provided state."
+        )
+
+    return sid, sess
+
 def _evaluate(base_url: str, sid: str, payload: dict) -> dict:
     return _post(f"{base_url}/sessions/{sid}/evaluate", payload)
 
 def _apply(base_url: str, sid: str, payload: dict) -> dict:
-    return _post(f"{base_url}/sessions/{sid}/action", payload)
+    _post(f"{base_url}/sessions/{sid}/action", payload)
+    # Always re-fetch so we assert against the stored state, not a handler echo
+    return _session_get(base_url, sid)
+
+# ---------- concrete scenarios ----------
+def _make_state_for_adjacent_melee(info: dict) -> dict:
+    st = _fresh_state_3x3()
+    _add_unit(st, info, uid="A1", side="A", x=1, y=1, strength=5, defense=0, hp=10, max_hp=10, ap=2, max_ap=2)
+    _add_unit(st, info, uid="B1", side="B", x=1, y=2, strength=3, defense=0, hp=10, max_hp=10, ap=2, max_ap=2)
+    st["active_side"] = "A"
+    st["active_index"] = 0
+    return st
+
+def _make_state_for_out_of_range(info: dict) -> dict:
+    st = _fresh_state_3x3()
+    _add_unit(st, info, uid="A2", side="A", x=0, y=0, strength=5, defense=0, hp=10, max_hp=10, ap=2, max_ap=2)
+    _add_unit(st, info, uid="B2", side="B", x=2, y=2, strength=3, defense=0, hp=10, max_hp=10, ap=2, max_ap=2)
+    st["active_side"] = "A"
+    st["active_index"] = 0
+    return st
+
+def _make_state_for_ranged_gap(info: dict) -> dict:
+    st = _fresh_state_3x3()
+    # bow (+1 range) → effective range 2
+    _add_item(st, info, iid="bow1", name="Bow", range_bonus=1, attack_bonus=0, defense_bonus=0)
+    _add_unit(st, info, uid="A3", side="A", x=0, y=0, strength=4, defense=0, hp=10, max_hp=10, ap=2, max_ap=2)
+    _add_unit(st, info, uid="B3", side="B", x=0, y=2, strength=3, defense=0, hp=10, max_hp=10, ap=2, max_ap=2)
+    st["units"]["B3"]["item_ids"] = ["bow1"]
+    st["active_side"] = "A"
+    st["active_index"] = 0
+    return st
 
 # ---------- tests ----------
-
 def test_melee_adjacent_attack_applies_damage(base_url: str):
-    """
-    Two units adjacent; melee A hits B; damage = strength - defense (min 1) = 5.
-    """
     info = _tbs_info(base_url)
     state = _make_state_for_adjacent_melee(info)
 
-    # Create session with full State (no spawn action in TBS)
-    sess = _post(f"{base_url}/sessions", {"ruleset": "tbs", **state})
-    sid = sess["id"]
+    sid, sess = _create_tbs_session_with_state(base_url, state)
 
     atk = _attack_tpl(info)
     atk["attacker_id"] = "A1"
@@ -196,37 +170,26 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
     assert hp_after == 5, f"expected B1 HP=5, got {hp_after}"
 
 def test_melee_out_of_range_attack_rejected(base_url: str):
-    """
-    A at (0,0) vs B at (2,2): manhattan 4 > range 1 → illegal.
-    """
     info = _tbs_info(base_url)
     state = _make_state_for_out_of_range(info)
 
-    sess = _post(f"{base_url}/sessions", {"ruleset": "tbs", **state})
-    sid = sess["id"]
+    sid, sess = _create_tbs_session_with_state(base_url, state)
 
     atk = _attack_tpl(info)
     atk["attacker_id"] = "A2"
     atk["target_id"]   = "B2"
 
     ex = _evaluate(base_url, sid, atk)
-    # Engine's evaluate should flag it illegal
     assert not ex.get("ok", False), f"expected out-of-range to be illegal, got {ex}"
 
-    # And /action should reject (prefer 4xx; if your engine returns 200 with ok:false, adjust here)
     with pytest.raises(requests.HTTPError):
         _apply(base_url, sid, atk)
 
 def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
-    """
-    Column 0: (0,0)=A3 melee, (0,1)=empty, (0,2)=B3 archer (range 2 via +1 item).
-    Melee cannot reach; archer can hit A3 for 3 damage.
-    """
     info = _tbs_info(base_url)
     state = _make_state_for_ranged_gap(info)
 
-    sess = _post(f"{base_url}/sessions", {"ruleset": "tbs", **state})
-    sid = sess["id"]
+    sid, sess = _create_tbs_session_with_state(base_url, state)
 
     # melee should fail
     atk_fail = _attack_tpl(info)
