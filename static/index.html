@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <title>TBS Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsoneditor@9.10.0/dist/jsoneditor.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/jsoneditor@9.10.0/dist/jsoneditor.min.js"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 20px; max-width: 800px; }
     #grid { display: grid; grid-auto-rows: 32px; grid-auto-columns: 32px; gap: 1px; margin: 10px 0; border: 1px solid #ccc; }
@@ -47,9 +49,34 @@
     <div class="panel">
       <strong>Existing Sessions</strong>
   <button id="new" type="button">New Game</button>
+  <button id="create-session" type="button">Create Session</button>
       <button id="refresh-sessions" class="action-btn">Refresh</button>
     </div>
     <div id="sessions-list" class="panel" style="flex-direction: column; align-items: stretch;"></div>
+  </div>
+
+  <!-- Create Session Screen -->
+  <div id="create" style="display:none;">
+    <div class="panel">
+      <strong>Create Custom Session</strong>
+      <button id="cancel-create" type="button" class="action-btn">Back</button>
+    </div>
+    <div class="panel" style="align-items: stretch; flex-direction: column;">
+      <div style="font-size: 14px; color:#555;">Edit the JSON, then Submit to create a new game session.</div>
+      <div id="editor-controls" class="panel" style="gap:8px; flex-wrap: wrap;">
+        <span style="color:#555;">Editor:</span>
+        <label><input type="radio" name="editor-mode" id="mode-tree" checked> Tree</label>
+        <label><input type="radio" name="editor-mode" id="mode-text"> Text</label>
+        <button id="expand-all" class="action-btn" type="button">Expand All</button>
+        <button id="collapse-all" class="action-btn" type="button">Collapse All</button>
+      </div>
+      <div id="create-editor" style="width:100%; min-height: 360px; border:1px solid #e0e0e0; border-radius:4px;"></div>
+      <textarea id="create-json" spellcheck="false" style="display:none; width:100%; min-height: 360px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace; font-size: 12px; padding:8px;"></textarea>
+      <div class="panel">
+        <button id="submit-session" type="button">Submit</button>
+        <span id="create-status" class="status" style="display:none;"></span>
+      </div>
+    </div>
   </div>
 
   <div id="game" style="display:none;">
@@ -84,6 +111,7 @@ let SELECTED = null;
 let LEGAL_ACTIONS = [];
 let MOVE_HINTS = new Set();
 let ATTACK_HINTS = new Map(); // key: "x,y" => target unit id
+let CREATE_EDITOR = null; // JSONEditor instance when using tree mode
 
 async function api(path, opts={}) {
   const r = await fetch(path, {headers:{'content-type':'application/json'}, ...opts});
@@ -152,12 +180,20 @@ async function attemptAction(action) {
 
 function showGame() {
   document.getElementById('sessions').style.display = 'none';
+  document.getElementById('create').style.display = 'none';
   document.getElementById('game').style.display = '';
 }
 
 function showSessions() {
   document.getElementById('game').style.display = 'none';
+  document.getElementById('create').style.display = 'none';
   document.getElementById('sessions').style.display = '';
+}
+
+function showCreate() {
+  document.getElementById('sessions').style.display = 'none';
+  document.getElementById('game').style.display = 'none';
+  document.getElementById('create').style.display = '';
 }
 
 async function refreshSessions() {
@@ -241,6 +277,128 @@ document.getElementById('new').onclick = async () => {
     log(`Error: ${e.message}`, 'error');
   }
 };
+
+document.getElementById('create-session').onclick = async () => {
+  try {
+    // Load example from /info
+    const info = await api('/info');
+    let example = (info.requests && info.requests.create_session && info.requests.create_session.example)
+      ? info.requests.create_session.example
+      : { mission: info?.models?.mission?.example };
+    if (!example || !example.mission) {
+      example = { mission: {} };
+      log('Could not find example mission in /info; starting with empty object', 'warn');
+    }
+    const ta = document.getElementById('create-json');
+    const editorEl = document.getElementById('create-editor');
+    const controls = document.getElementById('editor-controls');
+    ta.value = JSON.stringify(example, null, 2);
+    document.getElementById('create-status').style.display = 'none';
+    // Initialize JSONEditor if available
+    if (window.JSONEditor) {
+      if (!CREATE_EDITOR) {
+        CREATE_EDITOR = new JSONEditor(editorEl, { mode: 'tree', mainMenuBar: false });
+      }
+      CREATE_EDITOR.set(example);
+      editorEl.style.display = '';
+      controls.style.display = '';
+      document.getElementById('mode-tree').checked = true;
+      document.getElementById('mode-text').checked = false;
+      ta.style.display = 'none';
+    } else {
+      // Fallback to plaintext textarea
+      editorEl.style.display = 'none';
+      controls.style.display = 'none';
+      ta.style.display = '';
+    }
+    showCreate();
+    document.getElementById('create').scrollIntoView({behavior:'smooth', block:'start'});
+  } catch (e) {
+    log(`Error preparing create session: ${e.message}`, 'error');
+  }
+};
+
+document.getElementById('cancel-create').onclick = () => {
+  showSessions();
+};
+
+document.getElementById('submit-session').onclick = async () => {
+  const status = document.getElementById('create-status');
+  status.style.display = '';
+  status.textContent = 'Submitting...';
+  try {
+    let body;
+    if (CREATE_EDITOR) {
+      try { body = CREATE_EDITOR.get(); }
+      catch (e) { status.textContent = 'Invalid JSON in editor: ' + e.message; status.classList.add('error'); return; }
+    } else {
+      const raw = document.getElementById('create-json').value;
+      try { body = JSON.parse(raw); }
+      catch (e) { status.textContent = 'Invalid JSON: ' + e.message; status.classList.add('error'); return; }
+    }
+    if (!body || typeof body !== 'object') {
+      status.textContent = 'Body must be a JSON object.';
+      status.classList.add('error');
+      return;
+    }
+    if (!('mission' in body)) {
+      status.textContent = 'Body should contain a "mission" field.';
+      status.classList.add('error');
+      return;
+    }
+    const res = await api('/sessions', { method:'POST', body: JSON.stringify(body) });
+    SID = res.id;
+    STATE = res.mission;
+    SELECTED = null;
+    LEGAL_ACTIONS = [];
+    log(`Custom session ${SID} created`);
+    updateUI();
+    await fetchLegalAndComputeHints();
+    render();
+    showGame();
+    refreshSessions();
+    status.textContent = 'Created successfully!';
+    status.classList.remove('error');
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.classList.add('error');
+    log(`Error creating session: ${e.message}`, 'error');
+  }
+};
+
+// Editor mode and expand/collapse controls
+(() => {
+  const controls = document.getElementById('editor-controls');
+  if (!controls) return;
+  const modeTree = document.getElementById('mode-tree');
+  const modeText = document.getElementById('mode-text');
+  const editorEl = document.getElementById('create-editor');
+  const ta = document.getElementById('create-json');
+  const toTree = () => {
+    if (!window.JSONEditor) return;
+    try {
+      const obj = JSON.parse(ta.value || '{}');
+      if (!CREATE_EDITOR) CREATE_EDITOR = new JSONEditor(editorEl, { mode: 'tree', mainMenuBar: false });
+      CREATE_EDITOR.set(obj);
+      ta.style.display = 'none';
+      editorEl.style.display = '';
+    } catch (e) { log('Cannot switch to Tree: ' + e.message, 'error'); }
+  };
+  const toText = () => {
+    try {
+      const obj = CREATE_EDITOR ? CREATE_EDITOR.get() : {};
+      ta.value = JSON.stringify(obj, null, 2);
+      editorEl.style.display = 'none';
+      ta.style.display = '';
+    } catch (e) { log('Cannot switch to Text: ' + e.message, 'error'); }
+  };
+  if (modeTree) modeTree.addEventListener('change', () => { if (modeTree.checked) toTree(); });
+  if (modeText) modeText.addEventListener('change', () => { if (modeText.checked) toText(); });
+  const expandBtn = document.getElementById('expand-all');
+  const collapseBtn = document.getElementById('collapse-all');
+  if (expandBtn) expandBtn.onclick = () => { if (CREATE_EDITOR) CREATE_EDITOR.expandAll(); };
+  if (collapseBtn) collapseBtn.onclick = () => { if (CREATE_EDITOR) CREATE_EDITOR.collapseAll(); };
+})();
 
 document.getElementById('end-turn').onclick = async () => {
   if (!SID) return;
