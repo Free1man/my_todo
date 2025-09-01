@@ -14,7 +14,7 @@ from .models.api import (
     MoveAction, AttackAction, UseSkillAction, EndTurnAction,
 )
 from .models.tbs import TBSSession, default_demo_mission
-from .models.common import Unit, Item
+from .models.common import Unit, Item, Mission
 from .engine.tbs_engine import TBSEngine
 from .storage import Storage, InMemoryStorage
 from .storage_redis import RedisStorage
@@ -63,11 +63,16 @@ def health() -> Dict[str, Any]:
 
 @app.get("/info")
 def defaults_info():
-    """Global default models and action contracts (no ruleset concept)."""
+    """Expose mission schema+example for session creation, plus unit/item examples used by tests."""
+    demo = default_demo_mission()
     return {
         "models": {
             "unit": {"schema": Unit.model_json_schema(), "example": Unit().model_dump(mode="json")},
             "item": {"schema": Item.model_json_schema(), "example": Item().model_dump(mode="json")},
+            "mission": {
+                "schema": Mission.model_json_schema(),
+                "example": demo.model_dump(mode="json"),
+            }
         },
         "actions": {
             "move": {
@@ -86,6 +91,12 @@ def defaults_info():
                 "schema": EndTurnAction.model_json_schema(),
                 "example": EndTurnAction().model_dump(mode="json"),
             },
+        },
+        "requests": {
+            "create_session": {
+                "schema": CreateSessionRequest.model_json_schema(),
+                "example": {"mission": demo.model_dump(mode="json")},
+            }
         },
     }
 
