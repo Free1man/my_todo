@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8"/>
+<title>Chess – Minimal UI</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 16px; }
+  #board { display: grid; grid-template-columns: repeat(8, 56px); gap: 2px; user-select: none; }
+  .sq { width: 56px; height: 56px; display: grid; place-items: center; cursor: pointer; font-size: 28px; }
+  .light { background: #f0d9b5; } .dark { background: #b58863; }
+  .sel { outline: 3px solid #1e90ff; }
+  .hl  { box-shadow: inset 0 0 0 4px rgba(30,144,255,.5); }
+  #bar { margin: 12px 0; display:flex; gap:12px; align-items:center; }
+  input { padding: 4px 6px; }
+  button { padding: 6px 10px; }
+</style>
+<div id="bar">
+  <label>Session ID: <input id="sidInput" value="" size="28"/></label>
+  <button id="reloadBtn">Reload</button>
+  <div id="turn"></div>
+  <div id="status"></div>
+  <button id="newBtn">New Chess Session</button>
+  <label><input type="checkbox" id="autoBlack" checked/> Auto-play Black</label>
+  <span id="err" style="color:#b00"></span>
+  <span id="ok" style="color:#070"></span>
+  <a href="/" style="margin-left:auto">Home</a>
+ </div>
+<div id="board"></div>
+<script src="./chess-minimal.js"></script>

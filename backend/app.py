@@ -10,6 +10,8 @@ from backend.engine.store import get_session as store_get, save_session as store
 from backend.core.ruleset_registry import get_ruleset, list_rulesets
 from backend.core.primitives import Explanation  # for response_model typing
 from backend.rulesets import *  # noqa: F401  (side-effect: registers rulesets)
+from backend.routes.chess_ai import router as chess_ai_router
+from backend.routes.chess_ui import router as chess_ui_router
 
 
 app = FastAPI(title="Abstract Tactics — TBS + Chess")
@@ -142,4 +144,6 @@ async def session_info(sid: str):
 
 
 # Mount static files (after all API routes to avoid conflicts)
+app.include_router(chess_ui_router)
+app.include_router(chess_ai_router)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

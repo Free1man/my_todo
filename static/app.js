@@ -6,6 +6,7 @@ let currentSession = null;
 let currentRuleset = null;
 let currentEvaluation = null; // Store current evaluation result
 let chessSelection = { from: null, moves: new Set() }; // chess selection state
+let aiMoveInProgress = false; // prevent concurrent AI triggers
 
 // DOM elements
 let elements = {};
@@ -169,6 +170,11 @@ async function loadGameSession(sessionId) {
         currentRuleset = currentSession.ruleset;
 
         displayGameSession();
+
+        // If it's a chess game and black's turn, trigger AI move
+        if (currentRuleset === 'chess' && currentSession?.state?.turn === 'black' && !currentSession?.state?.winner) {
+            await maybeTriggerBlackAI();
+        }
 
     } catch (error) {
         showErrorMessage(`Failed to load game: ${error.message}`);
@@ -522,6 +528,11 @@ async function submitAction(action) {
         currentSession = updatedSession;
         displayGameSession();
 
+        // After a successful player move in chess, trigger AI if it's now black's turn
+        if (currentRuleset === 'chess' && currentSession?.state?.turn === 'black' && !currentSession?.state?.winner) {
+            await maybeTriggerBlackAI();
+        }
+
     // Clear form inputs
     if (currentRuleset === 'tbs') {
             // Only clear unit select if it's visible (not for end_turn)
@@ -538,6 +549,69 @@ async function submitAction(action) {
     } catch (error) {
         console.error('Submit action error:', error);
         showErrorMessage('Network error occurred');
+    }
+}
+
+async function maybeTriggerBlackAI() {
+    if (aiMoveInProgress) return;
+    if (!currentSession || currentRuleset !== 'chess') return;
+    if (currentSession.state?.turn !== 'black' || currentSession.state?.winner) return;
+
+    aiMoveInProgress = true;
+    try {
+        // 1) Get FEN for current session from the UI-oriented endpoint
+        const stateRes = await fetch(`${API_BASE}/sessions/${currentSession.id}/state`);
+        if (!stateRes.ok) {
+            console.warn('Failed to fetch session state for FEN', stateRes.status);
+            return;
+        }
+        const uiState = await stateRes.json();
+        const fen = uiState?.fen;
+        if (!fen) {
+            console.warn('No FEN available from state endpoint');
+            return;
+        }
+
+        // 2) Ask AI for best move using FEN
+        const aiRes = await fetch(`${API_BASE}/chess/ai/next`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fen })
+        });
+        if (!aiRes.ok) {
+            console.warn('AI move request failed', aiRes.status);
+            return;
+        }
+        const aiData = await aiRes.json();
+        const uci = aiData?.uci;
+        if (!uci || uci.length < 4) {
+            console.warn('AI returned no move');
+            return;
+        }
+
+        // 3) Apply returned UCI via normal action endpoint
+        const src = uci.slice(0,2).toLowerCase();
+        const dst = uci.slice(2,4).toLowerCase();
+        let promotion = null;
+        if (uci.length > 4) {
+            const m = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
+            promotion = m[uci[4].toLowerCase()] || null;
+        }
+        const applyRes = await fetch(`${API_BASE}/sessions/${currentSession.id}/action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'move', src, dst, promotion })
+        });
+        if (!applyRes.ok) {
+            console.warn('Failed to apply AI move', applyRes.status);
+            return;
+        }
+        currentSession = await applyRes.json();
+        displayGameSession();
+    } catch (e) {
+        console.warn('AI move request error', e);
+    } finally {
+        aiMoveInProgress = false;
     }
 }
 
