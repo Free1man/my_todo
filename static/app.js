@@ -5,6 +5,7 @@ const API_BASE = window.location.origin;
 let currentSession = null;
 let currentRuleset = null;
 let currentEvaluation = null; // Store current evaluation result
+let chessSelection = { from: null, moves: new Set() }; // chess selection state
 
 // DOM elements
 let elements = {};
@@ -28,8 +29,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initializeElements() {
     // Index page elements
-    elements.rulesetSelect = document.getElementById('ruleset-select');
-    elements.createGameBtn = document.getElementById('create-game-btn');
+    elements.createChessBtn = document.getElementById('create-chess-btn');
+    elements.createTbsBtn = document.getElementById('create-tbs-btn');
     elements.loading = document.getElementById('loading');
     elements.gamesContainer = document.getElementById('games-container');
 
@@ -39,10 +40,10 @@ function initializeElements() {
     elements.gameStatus = document.getElementById('game-status');
     elements.gameBoard = document.getElementById('game-board');
 
-    // Chess controls
-    elements.chessPieceSelect = document.getElementById('chess-piece-select');
-    elements.chessMoveSelect = document.getElementById('chess-move-select');
-    elements.submitChessMove = document.getElementById('submit-chess-move');
+    // Chess uses click-on-board UX now; no dropdowns
+    elements.chessPieceSelect = null;
+    elements.chessMoveSelect = null;
+    elements.submitChessMove = null;
 
     // TBS controls
     elements.tbsActionType = document.getElementById('tbs-action-type');
@@ -60,9 +61,8 @@ function initializeElements() {
 }
 
 function setupEventListeners() {
-    if (elements.createGameBtn) {
-        elements.createGameBtn.addEventListener('click', createNewGame);
-    }
+    if (elements.createChessBtn) elements.createChessBtn.addEventListener('click', () => createNewGame('chess'));
+    if (elements.createTbsBtn) elements.createTbsBtn.addEventListener('click', () => createNewGame('tbs'));
 
     if (elements.backBtn) {
         elements.backBtn.addEventListener('click', () => {
@@ -70,9 +70,7 @@ function setupEventListeners() {
         });
     }
 
-    if (elements.submitChessMove) {
-        elements.submitChessMove.addEventListener('click', submitChessMove);
-    }
+    // Chess: no submit button; actions are driven by board clicks
 
     if (elements.submitTbsAction) {
         elements.submitTbsAction.addEventListener('click', submitTbsAction);
@@ -82,10 +80,7 @@ function setupEventListeners() {
         elements.tbsActionType.addEventListener('change', toggleTbsActionFields);
     }
 
-    // New event listeners for dropdowns
-    if (elements.chessPieceSelect) {
-        elements.chessPieceSelect.addEventListener('change', onChessPieceSelected);
-    }
+    // No chess dropdowns anymore
 
     if (elements.tbsUnitSelect) {
         elements.tbsUnitSelect.addEventListener('change', onTbsUnitSelected);
@@ -100,10 +95,10 @@ function setupEventListeners() {
     }
 }
 
-async function createNewGame() {
-    const ruleset = elements.rulesetSelect.value;
+async function createNewGame(ruleset) {
     elements.loading.style.display = 'block';
-    elements.createGameBtn.disabled = true;
+    if (elements.createChessBtn) elements.createChessBtn.disabled = true;
+    if (elements.createTbsBtn) elements.createTbsBtn.disabled = true;
 
     try {
         const response = await fetch(`${API_BASE}/sessions`, {
@@ -124,7 +119,8 @@ async function createNewGame() {
         console.error('Create game error:', error);
     } finally {
         elements.loading.style.display = 'none';
-        elements.createGameBtn.disabled = false;
+        if (elements.createChessBtn) elements.createChessBtn.disabled = false;
+        if (elements.createTbsBtn) elements.createTbsBtn.disabled = false;
     }
 }
 
@@ -196,17 +192,17 @@ function displayGameSession() {
 
     // Show appropriate controls
     if (currentRuleset === 'chess') {
-        document.getElementById('chess-controls').style.display = 'block';
-        document.getElementById('tbs-controls').style.display = 'none';
+        const tbsEl = document.getElementById('tbs-controls');
+        if (tbsEl) tbsEl.style.display = 'none';
     } else if (currentRuleset === 'tbs') {
-        document.getElementById('chess-controls').style.display = 'none';
-        document.getElementById('tbs-controls').style.display = 'block';
+        const tbsEl = document.getElementById('tbs-controls');
+        if (tbsEl) tbsEl.style.display = 'block';
     }
 
     // Display game board/state
     displayGameBoard();
 
-    // Populate unit dropdowns
+    // Populate unit dropdowns (TBS only)
     populateUnitDropdowns();
 
     // Initialize TBS action fields
@@ -227,6 +223,16 @@ function displayGameBoard() {
     }
 
     elements.gameBoard.innerHTML = boardHtml;
+
+    // Chess click handlers
+    if (currentRuleset === 'chess') {
+        clearChessHighlights();
+        elements.gameBoard.querySelectorAll('.chess-board .piece').forEach(el => {
+            const sq = el.getAttribute('data-square');
+            if (!sq) return;
+            el.addEventListener('click', () => handleChessSquareClick(sq));
+        });
+    }
 }
 
 function displayChessBoard(board) {
@@ -248,7 +254,7 @@ function displayChessBoard(board) {
                 cellContent = getChessPieceSymbol(pieceKey);
             }
 
-            html += `<span class="${cellClass}" title="${square}">${cellContent}</span>`;
+            html += `<span class="${cellClass}" data-square="${square}" title="${square}">${cellContent}</span>`;
         }
         html += '<br>';
     }
@@ -260,6 +266,80 @@ function displayChessBoard(board) {
 
     html += '</div>';
     return html;
+}
+
+// Chess click-to-move implementation
+function clearChessHighlights() {
+    const boardEl = elements.gameBoard;
+    if (!boardEl) return;
+    boardEl.querySelectorAll('.piece.selected,.piece.highlight-move,.piece.highlight-capture')
+        .forEach(el => el.classList.remove('selected','highlight-move','highlight-capture'));
+    chessSelection = { from: null, moves: new Set() };
+}
+
+async function handleChessSquareClick(square) {
+    if (!currentSession || currentRuleset !== 'chess') return;
+    const state = currentSession.state;
+    if (!state || state.winner) {
+        if (state && state.winner) showErrorMessage(`Game is over! Winner: ${state.winner}`);
+        return;
+    }
+
+    // Move if clicking on a highlighted destination
+    if (chessSelection.from && chessSelection.moves.has(square)) {
+        const action = { type: 'move', src: chessSelection.from, dst: square };
+        clearChessHighlights();
+        await submitAction(action);
+        return;
+    }
+
+    const board = state.board || {};
+    const clickedPiece = board[square];
+    const toMove = state.turn || 'white';
+    if (!clickedPiece || clickedPiece.color !== toMove) {
+        // Deselect if clicking empty or opponent piece
+        clearChessHighlights();
+        return;
+    }
+
+    // Select the piece and evaluate legal moves by probing the API
+    clearChessHighlights();
+    chessSelection.from = square;
+    const selectedEl = document.querySelector(`[data-square="${square}"]`);
+    if (selectedEl) selectedEl.classList.add('selected');
+
+    const files = 'abcdefgh';
+    const ranks = '12345678';
+    const legalMoves = new Set();
+
+    const evals = [];
+    for (const f of files) {
+        for (const r of ranks) {
+            const dst = f + r;
+            if (dst === square) continue;
+            evals.push(
+                fetch(`${API_BASE}/sessions/${currentSession.id}/evaluate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'move', src: square, dst })
+                })
+                .then(res => res.ok ? res.json() : null)
+                .then(data => { if (data && data.ok) legalMoves.add(dst); })
+                .catch(() => {})
+            );
+        }
+    }
+
+    await Promise.all(evals);
+    chessSelection.moves = legalMoves;
+
+    // Highlight squares
+    legalMoves.forEach(dst => {
+        const el = document.querySelector(`[data-square="${dst}"]`);
+        if (!el) return;
+        if (board[dst]) el.classList.add('highlight-capture');
+        else el.classList.add('highlight-move');
+    });
 }
 
 function getChessPieceSymbol(piece) {
@@ -442,11 +522,8 @@ async function submitAction(action) {
         currentSession = updatedSession;
         displayGameSession();
 
-        // Clear form inputs
-        if (currentRuleset === 'chess') {
-            elements.chessPieceSelect.value = '';
-            elements.chessMoveSelect.innerHTML = '<option value="">Select destination...</option>';
-        } else {
+    // Clear form inputs
+    if (currentRuleset === 'tbs') {
             // Only clear unit select if it's visible (not for end_turn)
             if (elements.tbsActionType.value !== 'end_turn') {
                 elements.tbsUnitSelect.value = '';
@@ -501,41 +578,12 @@ function populateUnitDropdowns() {
     if (!currentSession || !currentSession.state) return;
 
     try {
-        if (currentRuleset === 'chess') {
-            populateChessPieces();
-        } else if (currentRuleset === 'tbs') {
+    if (currentRuleset === 'tbs') {
             populateTbsUnits();
         }
     } catch (error) {
         console.error('Error populating unit dropdowns:', error);
         showErrorMessage('Error loading game pieces/units');
-    }
-}
-
-function populateChessPieces() {
-    if (!elements.chessPieceSelect || !currentSession.state.board) return;
-
-    try {
-        const select = elements.chessPieceSelect;
-        select.innerHTML = '<option value="">Choose a piece...</option>';
-
-        // Get all pieces on the board
-        Object.entries(currentSession.state.board).forEach(([square, piece]) => {
-            if (piece && piece.type && piece.color) {
-                const pieceKey = `${piece.color}_${piece.type}`;
-                const pieceType = piece.type.charAt(0).toUpperCase() + piece.type.slice(1);
-                const option = document.createElement('option');
-                option.value = square;
-                option.textContent = `${getChessPieceSymbol(pieceKey)} ${pieceType} at ${square.toUpperCase()}`;
-                select.appendChild(option);
-            }
-        });
-    } catch (error) {
-        console.error('Error populating chess pieces:', error);
-        showErrorMessage('Error loading chess pieces');
-        if (elements.chessPieceSelect) {
-            elements.chessPieceSelect.innerHTML = '<option value="">Error loading pieces...</option>';
-        }
     }
 }
 
@@ -564,94 +612,6 @@ function populateTbsUnits() {
     }
 }
 
-async function onChessPieceSelected() {
-    const pieceSquare = elements.chessPieceSelect.value;
-    if (!pieceSquare) {
-        elements.chessMoveSelect.innerHTML = '<option value="">Select destination...</option>';
-        return;
-    }
-
-    // Check if game is over
-    if (currentSession.state.winner) {
-        showErrorMessage(`Game is over! Winner: ${currentSession.state.winner}`);
-        return;
-    }
-
-    try {
-        // Get all possible destination squares (8x8 board)
-        const files = 'abcdefgh';
-        const ranks = '12345678';
-        const possibleMoves = [];
-
-        // Try each possible destination square
-        for (let file of files) {
-            for (let rank of ranks) {
-                const dst = file + rank;
-
-                // Skip if same as source
-                if (dst === pieceSquare) continue;
-
-                try {
-                    const evaluationData = { type: 'move', src: pieceSquare, dst: dst };
-                    const response = await fetch(`${API_BASE}/sessions/${currentSession.id}/evaluate`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(evaluationData)
-                    });
-
-                    if (response.ok) {
-                        const result = await response.json();
-                        if (result.ok) {
-                            // This is a legal move
-                            possibleMoves.push(dst);
-                        }
-                    }
-                } catch (error) {
-                    // Ignore individual evaluation errors
-                    console.warn(`Failed to evaluate move to ${dst}:`, error);
-                }
-            }
-        }
-
-        // Populate the move select dropdown
-        const select = elements.chessMoveSelect;
-        select.innerHTML = '<option value="">Select destination...</option>';
-
-        if (possibleMoves.length > 0) {
-            possibleMoves.forEach(move => {
-                const option = document.createElement('option');
-                option.value = move;
-                option.textContent = move.toUpperCase();
-                select.appendChild(option);
-            });
-
-            // Show evaluation for the first move as an example
-            if (possibleMoves.length > 0) {
-                const firstMove = possibleMoves[0];
-                const evaluationData = { type: 'move', src: pieceSquare, dst: firstMove };
-                const response = await fetch(`${API_BASE}/sessions/${currentSession.id}/evaluate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(evaluationData)
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    currentEvaluation = result;
-                    showEvaluation(result);
-                }
-            }
-        } else {
-            select.innerHTML += '<option value="" disabled>No legal moves available</option>';
-            showErrorMessage('No legal moves available for this piece');
-        }
-
-    } catch (error) {
-        console.error('Error evaluating chess moves:', error);
-        showErrorMessage('Error evaluating possible moves');
-        elements.chessMoveSelect.innerHTML = '<option value="">Error loading moves...</option>';
-    }
-}
 
 async function onTbsUnitSelected() {
     const unitId = elements.tbsUnitSelect.value;
@@ -1033,9 +993,6 @@ function clearMoveOptions() {
     }
     if (elements.tbsTargetSelect) {
         elements.tbsTargetSelect.innerHTML = '<option value="">Select target...</option>';
-    }
-    if (elements.chessMoveSelect) {
-        elements.chessMoveSelect.innerHTML = '<option value="">Select destination...</option>';
     }
     currentEvaluation = null;
     hideEvaluation();
