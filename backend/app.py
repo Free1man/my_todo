@@ -1,145 +1,115 @@
 from __future__ import annotations
-from typing import Any, Dict, Optional
-from fastapi import FastAPI, HTTPException, Body
-from fastapi.middleware.cors import CORSMiddleware
+import os
+from uuid import uuid4
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Dict, Any
 
-from backend.engine.session import Session
-from backend.engine.store import get_session as store_get, save_session as store_set, store
-from backend.core.ruleset_registry import get_ruleset, list_rulesets
-from backend.core.primitives import Explanation  # for response_model typing
-from backend.rulesets import *  # noqa: F401  (side-effect: registers rulesets)
+from .models.api import (
+    CreateSessionRequest, SessionView, EvaluateRequest, EvaluateResponse,
+    ApplyActionRequest, ApplyActionResponse, RulesetsView,
+    LegalActionsResponse
+)
+from .models.tbs import TBSSession, default_demo_mission
+from .engine.tbs_engine import TBSEngine
+from .storage import Storage, InMemoryStorage
+from .storage_redis import RedisStorage
 
+# Storage: prefer Redis if REDIS_URL is set
+_redis_url = os.getenv("REDIS_URL")
+if _redis_url:
+    import redis
+    from .storage_redis import RedisStorage
+    _client = redis.from_url(_redis_url, decode_responses=False)
+    storage: Storage[TBSSession] = RedisStorage(client=_client, model_cls=TBSSession, key_prefix="tbs:sess")
+else:
+    storage = InMemoryStorage()
 
-app = FastAPI(title="Abstract Tactics — TBS")
+app = FastAPI(title="Abstract Tactics - TBS Only")
+engine = TBSEngine()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-
-class CreateSessionRequest(BaseModel):
-    """Request to create a new game session."""
-    ruleset: str
-    scheduler: Optional[str] = None
-    state: Optional[Dict[str, Any]] = None
-
+@app.get("/", response_class=HTMLResponse)
+def index():
+    return """<!doctype html><html><head><meta charset="utf-8"><title>TBS</title></head>
+<body>
+  <h1>Abstract Tactics — TBS</h1>
+  <p>Open <a href="/static/index.html">/a></p>
+</body></html>"""
 
 @app.get("/health")
-async def health() -> Dict[str, Any]:
-    """Health check with dependency status."""
+def health() -> Dict[str, Any]:
     ok = True
-    storage_type = store.__class__.__name__.replace('SessionStore', '').lower()
-    health_data = {"ok": ok, "storage": storage_type}
-    
-    if storage_type == "redis":
+    if isinstance(storage, RedisStorage):
         try:
-            await store._r.ping()  # type: ignore
-            health_data["redis_connected"] = True
+            storage.client.ping()
+            redis_connected = True
         except Exception:
-            health_data["redis_connected"] = False
-            health_data["ok"] = False
-    
+            redis_connected = False
+            ok = False
+        health_data = {"ok": ok, "storage": "redis", "redis_connected": redis_connected}
+    else:
+        health_data = {"ok": ok, "storage": "memory"}
     return health_data
 
+@app.get("/rulesets", response_model=RulesetsView)
+def get_rulesets():
+    return RulesetsView(rulesets=["tbs"])
 
-@app.get("/rulesets")
-async def rulesets() -> Dict[str, Dict[str, str]]:
-    # maps ruleset name -> default scheduler
-    return {"rulesets": list_rulesets()}
+@app.get("/sessions", response_model=list[SessionView])
+def list_sessions():
+    return [SessionView(id=s.id, mission=s.mission) for s in storage.list_all()]
 
+@app.post("/sessions", response_model=SessionView)
+def create_session(req: CreateSessionRequest):
+    sid = str(uuid4())
+    mission = req.mission or default_demo_mission()
+    sess = TBSSession(id=sid, mission=mission)
+    storage.save(sess)
+    return SessionView(id=sess.id, mission=sess.mission)
 
-@app.get("/sessions")
-async def list_sessions() -> list[Session]:
-    """List all game sessions."""
-    sessions = await store.all()
-    return list(sessions.values())
+@app.get("/sessions/{sid}", response_model=SessionView)
+def get_session(sid: str):
+    sess = storage.get(sid)
+    if not sess:
+        raise HTTPException(404, "session not found")
+    return SessionView(id=sess.id, mission=sess.mission)
 
+@app.post("/sessions/{sid}/evaluate", response_model=EvaluateResponse)
+def evaluate_action(sid: str, req: EvaluateRequest):
+    sess = storage.get(sid)
+    if not sess:
+        raise HTTPException(404, "session not found")
+    return engine.evaluate(sess, req.action)
 
-@app.post("/sessions", response_model=Session)
-async def create_session(req: CreateSessionRequest) -> Session:
-    """Create a session from a ruleset (optional initial state)."""
-    rs = get_ruleset(req.ruleset)
-    st = rs.create(req.state)
-    sess = Session(ruleset=rs.name, scheduler=req.scheduler or rs.default_scheduler, state=st.to_serializable())
-    # Best-effort summary for quick UI cards
-    try:
-        sess.meta.update(rs.summarize(st))
-    except Exception:
-        pass
-    await store_set(sess)
-    return sess
+@app.get("/sessions/{sid}/legal_actions", response_model=LegalActionsResponse)
+def list_legal_actions(sid: str):
+    sess = storage.get(sid)
+    if not sess:
+        raise HTTPException(404, "session not found")
+    return engine.list_legal_actions(sess)
 
+@app.post("/sessions/{sid}/action", response_model=ApplyActionResponse)
+def apply_action(sid: str, req: ApplyActionRequest):
+    sess = storage.get(sid)
+    if not sess:
+        raise HTTPException(404, "session not found")
+    eval_result = engine.evaluate(sess, req.action)
+    if not eval_result.legal:
+        return ApplyActionResponse(applied=False, explanation=eval_result.explanation,
+                                   session=SessionView(id=sess.id, mission=sess.mission))
+    new_state = engine.apply(sess, req.action)
+    storage.save(new_state)
+    return ApplyActionResponse(applied=True, explanation=eval_result.explanation,
+                               session=SessionView(id=new_state.id, mission=new_state.mission))
 
-@app.get("/sessions/{sid}", response_model=Session)
-async def read_session(sid: str) -> Session:
-    """Fetch session by id with a refreshed summary."""
-    s = await store_get(sid)
-    if not s:
-        raise HTTPException(status_code=404, detail={"ok": False, "error": "Session not found", "sid": sid})
-    rs = get_ruleset(s.ruleset)
-    try:
-        s.meta.update(rs.summarize(rs.create(s.state)))
-    except Exception:
-        pass
-    return s
-
-
-@app.post("/sessions/{sid}/evaluate", response_model=Explanation)
-async def evaluate_action(sid: str, raw: Dict[str, Any] = Body(...)) -> Explanation:
-    """Dry-run an action and return a detailed Explanation."""
-    s = await store_get(sid)
-    if not s:
-        raise HTTPException(status_code=404, detail={"ok": False, "error": "Session not found", "sid": sid})
-    rs = get_ruleset(s.ruleset)
-    st = rs.create(s.state)
-    return rs.evaluate(st, raw)
-
-
-@app.post("/sessions/{sid}/action", response_model=Session)
-async def apply_action(sid: str, raw: Dict[str, Any] = Body(...)) -> Session:
-    """Apply an action to the session state; returns updated Session."""
-    s = await store_get(sid)
-    if not s:
-        raise HTTPException(status_code=404, detail={"ok": False, "error": "Session not found", "sid": sid})
-    rs = get_ruleset(s.ruleset)
-    st = rs.create(s.state)
-    res = rs.apply(st, raw)
-    if not res.get("ok"):
-        # Bubble up structured reason for consistent client UX
-        raise HTTPException(status_code=400, detail={"ok": False, "error": res.get("error", "Invalid action")})
-    s.state = st.to_serializable()
-    try:
-        s.meta.update(rs.summarize(st))
-    except Exception:
-        pass
-    await store_set(s)
-    return s
-
-
-@app.get("/rulesets/{ruleset}/info")
-async def ruleset_info(ruleset: str):
-    """Get schemas, templates, and examples for a ruleset."""
-    rs = get_ruleset(ruleset)
-    if not rs:
-        raise HTTPException(status_code=404, detail="unknown ruleset")
-    if not hasattr(rs, "info"):
-        raise HTTPException(status_code=501, detail="ruleset doesn't expose info()")
-    return rs.info(None)
-
-
-@app.get("/sessions/{sid}/info")
-async def session_info(sid: str):
-    """Get schemas, templates, and examples for a specific session."""
-    s = await store_get(sid)
-    if not s:
-        raise HTTPException(status_code=404, detail="session not found")
-    rs = get_ruleset(s.ruleset)
-    if not rs or not hasattr(rs, "info"):
-        raise HTTPException(status_code=400, detail="ruleset not found or no info()")
-    return rs.info(rs.create(s.state))
-
-
-# Mount static files (after all API routes to avoid conflicts)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

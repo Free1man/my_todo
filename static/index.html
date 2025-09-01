@@ -1,28 +1,112 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Abstract Tactics - TBS</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8" />
+  <title>TBS Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; }
+    #grid { display: grid; grid-auto-rows: 28px; grid-auto-columns: 28px; gap: 2px; margin-top: 10px; }
+    .tile { width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid #444; font-size:12px; }
+    .WATER { background:#7ec8e3; }
+    .BLOCKED { background:#444; color:#fff; }
+    .PLAIN { background:#eee; }
+    .selected { outline: 2px solid #ff9800; }
+    .u { border-radius: 50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; }
+    .ally { background:#8bc34a; }
+    .enemy { background:#f44336; color:#fff; }
+    .panel { display:flex; gap:16px; margin-top: 10px; }
+    button { cursor:pointer; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Abstract Tactics</h1>
-        <p>Create a new TBS game:</p>
+  <h1>TBS</h1>
+  <div class="panel">
+    <button id="new">New session</button>
+    <span>Session: <b id="sid">-</b></span>
+    <button id="end">End turn</button>
+    <button id="legal">Show legal in console</button>
+  </div>
+  <div class="panel">
+    <span>Selected unit: <b id="sel">none</b></span>
+    <button id="skill">Use Skill (first)</button>
+  </div>
+  <div id="grid"></div>
+  <pre id="log"></pre>
 
-        <div class="game-selection">
-            <button id="create-tbs-btn">New TBS Game</button>
-        </div>
+<script>
+let SID=null, STATE=null, SELECTED=null;
 
-        <div id="loading" style="display: none;">Creating game...</div>
+async function api(path, opts={}) {
+  const r = await fetch(path, {headers:{'content-type':'application/json'}, ...opts});
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+function log(msg){ const p=document.getElementById('log'); p.textContent = msg+"\n"+p.textContent; }
 
-        <div id="game-list">
-            <h2>Your Games</h2>
-            <div id="games-container"></div>
-        </div>
-    </div>
+document.getElementById('new').onclick = async () => {
+  const res = await api('/sessions', {method:'POST', body: JSON.stringify({ruleset:'tbs'})});
+  SID=res.id; document.getElementById('sid').textContent=SID; STATE=res.mission; render();
+};
+document.getElementById('end').onclick = async () => {
+  if(!SID) return;
+  const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action:{kind:'END_TURN'}})});
+  STATE=res.session.mission; render();
+};
+document.getElementById('skill').onclick = async () => {
+  if(!SID||!SELECTED) return;
+  const unit=STATE.units[SELECTED]; const skill=(unit.skills||[])[0]; if(!skill) return log('no skill');
+  const action={kind:'USE_SKILL', unit_id:unit.id, skill_id:skill.id, target_unit_id:unit.id};
+  const evalRes = await api(`/sessions/${SID}/evaluate`, {method:'POST', body: JSON.stringify({action})});
+  log('evaluate: '+JSON.stringify(evalRes));
+  if(!evalRes.legal) return;
+  const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
+  STATE=res.session.mission; render();
+};
+document.getElementById('legal').onclick = async () => {
+  if(!SID) return;
+  const res = await api(`/sessions/${SID}/legal_actions`);
+  console.log('legal actions', res.actions);
+  log('legal actions: '+res.actions.length);
+};
 
-    <script src="app.js"></script>
+function render(){
+  const g=document.getElementById('grid'); const w=STATE.map.width, h=STATE.map.height;
+  g.style.gridTemplateColumns=`repeat(${w}, 28px)`; g.innerHTML='';
+  const idx={};
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const t=STATE.map.tiles[y][x];
+      const div=document.createElement('div'); div.className='tile '+(t.terrain||'PLAIN');
+      div.dataset.x=x; div.dataset.y=y; g.appendChild(div); idx[`${x},${y}`]=div;
+    }
+  }
+  Object.values(STATE.units).forEach(u=>{
+    if(!u.alive) return;
+    const d=idx[`${u.pos[0]},${u.pos[1]}`];
+    const dot=document.createElement('div');
+    dot.className='u '+(u.side==='PLAYER'?'ally':'enemy');
+    dot.title=`${u.name} HP:${u.stats.base.HP} AP:${u.ap_left}`;
+    dot.textContent=u.side==='PLAYER'?'A':'E';
+    dot.onclick=()=>{ SELECTED=u.id; document.getElementById('sel').textContent=u.name;
+      document.querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'));
+      d.classList.add('selected'); };
+    d.appendChild(dot);
+  });
+
+  g.querySelectorAll('.tile').forEach(tile=>{
+    tile.onclick=async ()=>{
+      if(!SID||!SELECTED) return;
+      const to=[parseInt(tile.dataset.x), parseInt(tile.dataset.y)];
+      const action={kind:'MOVE', unit_id:SELECTED, to};
+      const evalRes = await api(`/sessions/${SID}/evaluate`, {method:'POST', body: JSON.stringify({action})});
+      log('evaluate: '+JSON.stringify(evalRes));
+      if(!evalRes.legal) return;
+      const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
+      STATE=res.session.mission; render();
+    };
+  });
+}
+</script>
 </body>
 </html>
