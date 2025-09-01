@@ -41,10 +41,10 @@ app.add_middleware(
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return """<!doctype html><html><head><meta charset="utf-8"><title>TBS</title></head>
+        return """<!doctype html><html><head><meta charset=\"utf-8\"><title>TBS</title></head>
 <body>
-  <h1>Abstract Tactics — TBS</h1>
-  <p>Open <a href="/static/index.html">/a></p>
+    <h1>Abstract Tactics — TBS</h1>
+    <p>Open <a href=\"/static/index.html\">UI</a></p>
 </body></html>"""
 
 @app.get("/health")
@@ -239,4 +239,5 @@ def apply_action(sid: str, req: ApplyActionRequest):
     return ApplyActionResponse(applied=True, explanation=eval_result.explanation,
                                session=SessionView(id=new_state.id, mission=new_state.mission))
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# Serve static UI under /static (so API routes remain clean)
+app.mount("/static", StaticFiles(directory="static", html=True), name="static")

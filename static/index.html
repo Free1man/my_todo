@@ -5,108 +5,244 @@
   <title>TBS Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, sans-serif; margin: 20px; }
-    #grid { display: grid; grid-auto-rows: 28px; grid-auto-columns: 28px; gap: 2px; margin-top: 10px; }
-    .tile { width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid #444; font-size:12px; }
+    body { font-family: system-ui, sans-serif; margin: 20px; max-width: 800px; }
+    #grid { display: grid; grid-auto-rows: 32px; grid-auto-columns: 32px; gap: 1px; margin: 10px 0; border: 1px solid #ccc; }
+    .tile { width:32px; height:32px; display:flex; align-items:center; justify-content:center; border:1px solid #ddd; font-size:10px; position: relative; }
     .WATER { background:#7ec8e3; }
-    .BLOCKED { background:#444; color:#fff; }
-    .PLAIN { background:#eee; }
-    .selected { outline: 2px solid #ff9800; }
-    .u { border-radius: 50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; }
-    .ally { background:#8bc34a; }
-    .enemy { background:#f44336; color:#fff; }
-    .panel { display:flex; gap:16px; margin-top: 10px; }
-    button { cursor:pointer; }
+    .BLOCKED { background:#666; color:#fff; }
+    .PLAIN { background:#f5f5f5; }
+    .FOREST { background:#8bc34a; }
+    .HILL { background:#ff9800; }
+    .selected { outline: 2px solid #ff9800; box-shadow: 0 0 4px rgba(255,152,0,0.5); }
+    .current { outline: 2px solid #2196f3; box-shadow: 0 0 4px rgba(33,150,243,0.5); }
+    .u { border-radius: 50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-weight: bold; font-size: 10px; position: relative; }
+    .PLAYER { background:#4caf50; color:#fff; }
+    .ENEMY { background:#f44336; color:#fff; }
+    .NEUTRAL { background:#9e9e9e; color:#fff; }
+    .dead { opacity: 0.3; }
+    .panel { display:flex; gap:12px; margin: 8px 0; align-items: center; flex-wrap: wrap; }
+    button { padding: 6px 12px; cursor:pointer; background: #2196f3; color: white; border: none; border-radius: 4px; }
+    button:hover { background: #1976d2; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .status { background: #f5f5f5; padding: 8px; border-radius: 4px; font-size: 14px; }
+    .unit-info { background: #e8f5e8; padding: 8px; border-radius: 4px; }
+    .log { background: #f9f9f9; border: 1px solid #ddd; padding: 8px; height: 120px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    .action-btn { padding: 4px 8px; font-size: 12px; }
   </style>
 </head>
 <body>
-  <h1>TBS</h1>
+  <h1>Turn-Based Strategy Demo</h1>
+
   <div class="panel">
-    <button id="new">New session</button>
-    <span>Session: <b id="sid">-</b></span>
-    <button id="end">End turn</button>
-    <button id="legal">Show legal in console</button>
+    <button id="new">New Game</button>
+    <button id="end-turn" disabled>End Turn</button>
+    <button id="legal">Show Legal Actions</button>
+    <div class="status">
+      <span>Session: <b id="sid">-</b></span> |
+      <span>Turn: <b id="turn">-</b></span> |
+      <span>Side: <b id="side">-</b></span>
+    </div>
   </div>
+
   <div class="panel">
-    <span>Selected unit: <b id="sel">none</b></span>
-    <button id="skill">Use Skill (first)</button>
+    <div class="unit-info">
+      <span>Current Unit: <b id="current-unit">none</b></span> |
+      <span>AP: <b id="ap">-</b></span> |
+      <span>Selected: <b id="sel">none</b></span>
+    </div>
   </div>
+
   <div id="grid"></div>
-  <pre id="log"></pre>
+
+  <div class="log" id="log"></div>
 
 <script>
-let SID=null, STATE=null, SELECTED=null;
+let SID = null;
+let STATE = null;
+let SELECTED = null;
+let LEGAL_ACTIONS = [];
 
 async function api(path, opts={}) {
   const r = await fetch(path, {headers:{'content-type':'application/json'}, ...opts});
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
-function log(msg){ const p=document.getElementById('log'); p.textContent = msg+"\n"+p.textContent; }
+
+function log(msg) {
+  const p = document.getElementById('log');
+  const time = new Date().toLocaleTimeString();
+  p.textContent = `[${time}] ${msg}\n${p.textContent}`;
+  p.scrollTop = 0;
+}
+
+function updateUI() {
+  document.getElementById('sid').textContent = SID || '-';
+  document.getElementById('turn').textContent = STATE ? STATE.turn : '-';
+  document.getElementById('side').textContent = STATE ? STATE.side_to_move : '-';
+  document.getElementById('current-unit').textContent = STATE?.current_unit_id ?
+    STATE.units[STATE.current_unit_id]?.name || 'unknown' : 'none';
+  document.getElementById('ap').textContent = STATE?.current_unit_id ?
+    STATE.units[STATE.current_unit_id]?.ap_left || 0 : '-';
+  document.getElementById('sel').textContent = SELECTED && STATE?.units[SELECTED] ?
+    STATE.units[SELECTED].name : 'none';
+
+  const endTurnBtn = document.getElementById('end-turn');
+  endTurnBtn.disabled = !SID;
+}
 
 document.getElementById('new').onclick = async () => {
-  const res = await api('/sessions', {method:'POST', body: JSON.stringify({ruleset:'tbs'})});
-  SID=res.id; document.getElementById('sid').textContent=SID; STATE=res.mission; render();
-};
-document.getElementById('end').onclick = async () => {
-  if(!SID) return;
-  const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action:{kind:'END_TURN'}})});
-  STATE=res.session.mission; render();
-};
-document.getElementById('skill').onclick = async () => {
-  if(!SID||!SELECTED) return;
-  const unit=STATE.units[SELECTED]; const skill=(unit.skills||[])[0]; if(!skill) return log('no skill');
-  const action={kind:'USE_SKILL', unit_id:unit.id, skill_id:skill.id, target_unit_id:unit.id};
-  const evalRes = await api(`/sessions/${SID}/evaluate`, {method:'POST', body: JSON.stringify({action})});
-  log('evaluate: '+JSON.stringify(evalRes));
-  if(!evalRes.legal) return;
-  const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
-  STATE=res.session.mission; render();
-};
-document.getElementById('legal').onclick = async () => {
-  if(!SID) return;
-  const res = await api(`/sessions/${SID}/legal_actions`);
-  console.log('legal actions', res.actions);
-  log('legal actions: '+res.actions.length);
+  try {
+    log('Creating new session...');
+    const res = await api('/sessions', {method:'POST', body: JSON.stringify({})});
+    SID = res.id;
+    STATE = res.mission;
+    SELECTED = null;
+    LEGAL_ACTIONS = [];
+    log(`Session ${SID} created`);
+    updateUI();
+    render();
+  } catch (e) {
+    log(`Error: ${e.message}`);
+  }
 };
 
-function render(){
-  const g=document.getElementById('grid'); const w=STATE.map.width, h=STATE.map.height;
-  g.style.gridTemplateColumns=`repeat(${w}, 28px)`; g.innerHTML='';
-  const idx={};
-  for(let y=0;y<h;y++){
-    for(let x=0;x<w;x++){
-      const t=STATE.map.tiles[y][x];
-      const div=document.createElement('div'); div.className='tile '+(t.terrain||'PLAIN');
-      div.dataset.x=x; div.dataset.y=y; g.appendChild(div); idx[`${x},${y}`]=div;
+document.getElementById('end-turn').onclick = async () => {
+  if (!SID) return;
+  try {
+    log('Ending turn...');
+    const action = {kind: 'END_TURN'};
+    const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
+    STATE = res.session.mission;
+    SELECTED = null;
+    LEGAL_ACTIONS = [];
+    log(`Turn ended: ${res.explanation}`);
+    updateUI();
+    render();
+  } catch (e) {
+    log(`Error: ${e.message}`);
+  }
+};
+
+document.getElementById('legal').onclick = async () => {
+  if (!SID) return;
+  try {
+    const res = await api(`/sessions/${SID}/legal_actions`);
+    LEGAL_ACTIONS = res.actions;
+    console.log('Legal actions:', LEGAL_ACTIONS);
+    log(`Found ${LEGAL_ACTIONS.length} legal actions`);
+  } catch (e) {
+    log(`Error: ${e.message}`);
+  }
+};
+
+function render() {
+  const g = document.getElementById('grid');
+  if (!STATE) return;
+
+  const w = STATE.map.width, h = STATE.map.height;
+  g.style.gridTemplateColumns = `repeat(${w}, 32px)`;
+  g.innerHTML = '';
+
+  const idx = {};
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const t = STATE.map.tiles[y][x];
+      const div = document.createElement('div');
+      div.className = 'tile ' + (t.terrain || 'PLAIN');
+      div.dataset.x = x;
+      div.dataset.y = y;
+      g.appendChild(div);
+      idx[`${x},${y}`] = div;
     }
   }
-  Object.values(STATE.units).forEach(u=>{
-    if(!u.alive) return;
-    const d=idx[`${u.pos[0]},${u.pos[1]}`];
-    const dot=document.createElement('div');
-    dot.className='u '+(u.side==='PLAYER'?'ally':'enemy');
-    dot.title=`${u.name} HP:${u.stats.base.HP} AP:${u.ap_left}`;
-    dot.textContent=u.side==='PLAYER'?'A':'E';
-    dot.onclick=()=>{ SELECTED=u.id; document.getElementById('sel').textContent=u.name;
-      document.querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'));
-      d.classList.add('selected'); };
+
+  // Render units
+  Object.values(STATE.units).forEach(u => {
+    const d = idx[`${u.pos[0]},${u.pos[1]}`];
+    if (!d) return;
+
+    const dot = document.createElement('div');
+    dot.className = 'u ' + u.side + (u.alive ? '' : ' dead');
+    dot.textContent = u.side === 'PLAYER' ? 'P' : 'E';
+    dot.title = `${u.name} (${u.side})\nHP: ${u.stats.base.HP || 0}\nAP: ${u.ap_left}\nPos: ${u.pos[0]},${u.pos[1]}`;
+
+    // Click to select unit
+    dot.onclick = (e) => {
+      e.stopPropagation();
+      if (!u.alive) return;
+
+      SELECTED = u.id;
+      updateUI();
+
+      // Clear previous selections
+      document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+      d.classList.add('selected');
+
+      log(`Selected ${u.name}`);
+    };
+
     d.appendChild(dot);
   });
 
-  g.querySelectorAll('.tile').forEach(tile=>{
-    tile.onclick=async ()=>{
-      if(!SID||!SELECTED) return;
-      const to=[parseInt(tile.dataset.x), parseInt(tile.dataset.y)];
-      const action={kind:'MOVE', unit_id:SELECTED, to};
-      const evalRes = await api(`/sessions/${SID}/evaluate`, {method:'POST', body: JSON.stringify({action})});
-      log('evaluate: '+JSON.stringify(evalRes));
-      if(!evalRes.legal) return;
-      const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
-      STATE=res.session.mission; render();
+  // Highlight current unit
+  if (STATE.current_unit_id) {
+    const currentUnit = STATE.units[STATE.current_unit_id];
+    if (currentUnit) {
+      const currentTile = idx[`${currentUnit.pos[0]},${currentUnit.pos[1]}`];
+      if (currentTile) {
+        currentTile.classList.add('current');
+      }
+    }
+  }
+
+  // Handle tile clicks for movement/attacks
+  g.querySelectorAll('.tile').forEach(tile => {
+    tile.onclick = async () => {
+      if (!SID || !SELECTED) return;
+
+      const to = [parseInt(tile.dataset.x), parseInt(tile.dataset.y)];
+      const selectedUnit = STATE.units[SELECTED];
+
+      // Check if there's a unit at the target position
+      const targetUnit = Object.values(STATE.units).find(u =>
+        u.alive && u.pos[0] === to[0] && u.pos[1] === to[1]
+      );
+
+      try {
+        let action;
+        if (targetUnit && targetUnit.side !== selectedUnit.side) {
+          // Attack
+          action = {kind: 'ATTACK', attacker_id: SELECTED, target_id: targetUnit.id};
+          log(`Attempting to attack ${targetUnit.name}...`);
+        } else {
+          // Move
+          action = {kind: 'MOVE', unit_id: SELECTED, to: to};
+          log(`Attempting to move to ${to[0]},${to[1]}...`);
+        }
+
+        // Evaluate first
+        const evalRes = await api(`/sessions/${SID}/evaluate`, {method:'POST', body: JSON.stringify({action})});
+        if (!evalRes.legal) {
+          log(`Action not legal: ${evalRes.explanation}`);
+          return;
+        }
+
+        // Apply action
+        const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
+        STATE = res.session.mission;
+        log(`Action applied: ${res.explanation}`);
+        updateUI();
+        render();
+
+      } catch (e) {
+        log(`Error: ${e.message}`);
+      }
     };
   });
 }
+
+// Initialize
+updateUI();
 </script>
 </body>
 </html>
