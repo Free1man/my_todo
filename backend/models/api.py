@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel
-from typing import List, Optional, Tuple, Literal
+from typing import List, Optional, Tuple, Literal, Dict, Any
 
 from .common import Mission
 
@@ -36,6 +36,7 @@ class RulesetsView(BaseModel):
 class CreateSessionRequest(BaseModel):
     ruleset: str = "tbs"
     mission: Optional[Mission] = None
+    state: Optional[Dict[str, Any]] = None
 
 class SessionView(BaseModel):
     id: str

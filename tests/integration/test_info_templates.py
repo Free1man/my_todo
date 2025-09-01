@@ -16,10 +16,10 @@ def test_session_info_examples_are_directly_usable(base_url: str):
 
     # use the move template, just fill an existing unit id
     sess = _get(f"{base_url}/sessions/{s['id']}")
-    any_uid = next(iter(sess["state"]["units"].keys()))
+    any_uid = next(iter(sess["mission"]["units"].keys()))
     move = i["actions"]["move"]["template"]
     move["unit_id"] = any_uid
     move["to"] = {"x": 0, "y": 1}
 
-    r = requests.post(f"{base_url}/sessions/{s['id']}/evaluate", json=move, timeout=5)
+    r = requests.post(f"{base_url}/sessions/{s['id']}/evaluate", json={"action": move}, timeout=5)
     assert r.status_code == 200

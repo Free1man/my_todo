@@ -76,14 +76,12 @@ def _add_item(st: dict, info: dict, *, iid: str, **overrides) -> None:
 
 # ---------- verify/create helpers ----------
 def _units_by_id(sess_json: dict) -> dict:
-    state = sess_json.get("state") or {}
-    units = state.get("units") or {}
-    return {u["id"]: u for u in units} if isinstance(units, list) else units
+    units = sess_json.get("mission", {}).get("units", {})
+    return units
 
 def _hp_of(sess_json: dict, uid: str) -> int:
     u = _units_by_id(sess_json)[uid]
-    hp = u.get("hp")
-    return hp["current"] if isinstance(hp, dict) else hp
+    return u["stats"]["base"]["HP"]
 
 def _create_tbs_session_with_state(base_url: str, state: dict) -> tuple[str, dict]:
     """
@@ -113,10 +111,10 @@ def _create_tbs_session_with_state(base_url: str, state: dict) -> tuple[str, dic
     return sid, sess
 
 def _evaluate(base_url: str, sid: str, payload: dict) -> dict:
-    return _post(f"{base_url}/sessions/{sid}/evaluate", payload)
+    return _post(f"{base_url}/sessions/{sid}/evaluate", {"action": payload})
 
 def _apply(base_url: str, sid: str, payload: dict) -> dict:
-    _post(f"{base_url}/sessions/{sid}/action", payload)
+    _post(f"{base_url}/sessions/{sid}/action", {"action": payload})
     # Always re-fetch so we assert against the stored state, not a handler echo
     return _session_get(base_url, sid)
 
@@ -145,7 +143,7 @@ def _make_state_for_ranged_gap(info: dict) -> dict:
     _add_unit(st, info, uid="B3", side="B", x=0, y=2, strength=3, defense=0, hp=10, max_hp=10, ap=2, max_ap=2)
     st["units"]["B3"]["item_ids"] = ["bow1"]
     st["active_side"] = "A"
-    st["active_index"] = 0
+    st["active_index"] = 1  # B3 is current for ranged attack
     return st
 
 # ---------- tests ----------
@@ -161,7 +159,7 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
 
     hp_before = _hp_of(sess, "B1")
     ex = _evaluate(base_url, sid, atk)
-    assert ex.get("ok") in (True, None), f"expected legal attack in evaluate, got {ex}"
+    assert ex.get("legal"), f"expected legal attack in evaluate, got {ex}"
 
     sess = _apply(base_url, sid, atk)
     hp_after = _hp_of(sess, "B1")
@@ -180,7 +178,7 @@ def test_melee_out_of_range_attack_rejected(base_url: str):
     atk["target_id"]   = "B2"
 
     ex = _evaluate(base_url, sid, atk)
-    assert not ex.get("ok", False), f"expected out-of-range to be illegal, got {ex}"
+    assert not ex.get("legal", False), f"expected out-of-range to be illegal, got {ex}"
 
     with pytest.raises(requests.HTTPError):
         _apply(base_url, sid, atk)
@@ -196,7 +194,7 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     atk_fail["attacker_id"] = "A3"
     atk_fail["target_id"]   = "B3"
     ex = _evaluate(base_url, sid, atk_fail)
-    assert not ex.get("ok", False), f"melee should be out of range, got {ex}"
+    assert not ex.get("legal", False), f"melee should be out of range, got {ex}"
     with pytest.raises(requests.HTTPError):
         _apply(base_url, sid, atk_fail)
 
@@ -205,7 +203,7 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     atk_ok["attacker_id"] = "B3"
     atk_ok["target_id"]   = "A3"
     ex2 = _evaluate(base_url, sid, atk_ok)
-    assert ex2.get("ok") in (True, None), f"expected legal ranged attack, got {ex2}"
+    assert ex2.get("legal"), f"expected legal ranged attack, got {ex2}"
 
     sess = _apply(base_url, sid, atk_ok)
     assert _hp_of(sess, "A3") == 7, f"expected A3 HP=7 after 3 damage"
