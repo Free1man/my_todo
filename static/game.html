@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Game Session</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
     <div class="container">
@@ -23,40 +23,8 @@
                     <h3>Actions</h3>
                     <div id="tbs-controls" style="display: none;">
                         <div class="control-group">
-                            <label>Action Type:</label>
-                            <select id="tbs-action-type">
-                                <option value="move">Move</option>
-                                <option value="attack">Attack</option>
-                                <option value="end_turn">End Turn</option>
-                            </select>
+                            <button id="end-turn-btn">End Turn</button>
                         </div>
-
-                        <div id="unit-selection" class="control-group">
-                            <label>Select Unit:</label>
-                            <select id="tbs-unit-select">
-                                <option value="">Choose a unit...</option>
-                            </select>
-                        </div>
-
-                        <div id="move-fields" class="action-fields">
-                            <div class="control-group">
-                                <label>Move to:</label>
-                                <select id="tbs-move-select">
-                                    <option value="">Select destination...</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div id="attack-fields" class="action-fields" style="display: none;">
-                            <div class="control-group">
-                                <label>Attack Target:</label>
-                                <select id="tbs-target-select">
-                                    <option value="">Select target...</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <button id="submit-tbs-action">Submit Action</button>
                     </div>
                 </div>
 
@@ -68,6 +36,6 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
 </body>
 </html>

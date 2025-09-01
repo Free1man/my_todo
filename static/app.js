@@ -46,15 +46,8 @@ function initializeElements() {
     elements.chessMoveSelect = null;
     elements.submitChessMove = null;
 
-    // TBS controls
-    elements.tbsActionType = document.getElementById('tbs-action-type');
-    elements.tbsUnitSelect = document.getElementById('tbs-unit-select');
-    elements.tbsMoveSelect = document.getElementById('tbs-move-select');
-    elements.tbsTargetSelect = document.getElementById('tbs-target-select');
-    elements.submitTbsAction = document.getElementById('submit-tbs-action');
-    elements.moveFields = document.getElementById('move-fields');
-    elements.attackFields = document.getElementById('attack-fields');
-    elements.unitSelection = document.getElementById('unit-selection');
+    // TBS minimal controls
+    elements.endTurnBtn = document.getElementById('end-turn-btn');
 
     // Evaluation
     elements.evaluationResult = document.getElementById('evaluation-result');
@@ -73,26 +66,11 @@ function setupEventListeners() {
 
     // Chess: no submit button; actions are driven by board clicks
 
-    if (elements.submitTbsAction) {
-        elements.submitTbsAction.addEventListener('click', submitTbsAction);
-    }
-
-    if (elements.tbsActionType) {
-        elements.tbsActionType.addEventListener('change', toggleTbsActionFields);
-    }
-
-    // No chess dropdowns anymore
-
-    if (elements.tbsUnitSelect) {
-        elements.tbsUnitSelect.addEventListener('change', onTbsUnitSelected);
-    }
-
-    if (elements.tbsMoveSelect) {
-        elements.tbsMoveSelect.addEventListener('change', onTbsMoveSelected);
-    }
-
-    if (elements.tbsTargetSelect) {
-        elements.tbsTargetSelect.addEventListener('change', onTbsTargetSelected);
+    // TBS: End Turn
+    if (elements.endTurnBtn) {
+        elements.endTurnBtn.addEventListener('click', async () => {
+            await submitAction({ type: 'end_turn' });
+        });
     }
 }
 
@@ -203,6 +181,8 @@ function displayGameSession() {
     } else if (currentRuleset === 'tbs') {
         const tbsEl = document.getElementById('tbs-controls');
         if (tbsEl) tbsEl.style.display = 'block';
+    // Auto-select active unit and highlight options
+    try { autoTbsSelectAndHighlight(); } catch(e) { console.warn('tbs highlight', e); }
     }
 
     // Display game board/state
@@ -214,6 +194,93 @@ function displayGameSession() {
     // Initialize TBS action fields
     if (currentRuleset === 'tbs' && elements.tbsActionType) {
         toggleTbsActionFields();
+    }
+}
+
+async function autoTbsSelectAndHighlight() {
+    const state = currentSession?.state;
+    if (!state) return;
+    const uid = state.turn_order?.[state.active_index];
+    const unit = uid ? state.units?.[uid] : null;
+    if (!uid || !unit) return;
+
+    // compute legal moves by probing evaluate (reuse existing logic but focused on one unit)
+    const width = state.map?.width || 0;
+    const height = state.map?.height || 0;
+    const possibleMoves = new Set();
+    const possibleAttacks = new Set();
+
+    // Gather candidates in a small radius based on total range heuristic (1 + item bonuses)
+    const totalRange = 1 + (unit.item_ids || []).reduce((acc, itemId) => {
+        const it = state.items?.[itemId];
+        return acc + (it ? (it.range_bonus || 0) : 0);
+    }, 0);
+
+    const evals = [];
+    for (let dx = -totalRange; dx <= totalRange; dx++) {
+        for (let dy = -totalRange; dy <= totalRange; dy++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = unit.pos.x + dx;
+            const ny = unit.pos.y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+
+            // Move check
+            evals.push(
+                fetch(`${API_BASE}/sessions/${currentSession.id}/evaluate`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'move', unit_id: uid, to: { x: nx, y: ny } })
+                })
+                .then(r => r.ok ? r.json() : null)
+                .then(j => { if (j?.ok) possibleMoves.add(`${nx},${ny}`); })
+                .catch(() => {})
+            );
+        }
+    }
+
+    // Attack check against all enemy units
+    for (const [tid, target] of Object.entries(state.units || {})) {
+        if (tid === uid || target.hp <= 0 || target.side === unit.side) continue;
+        evals.push(
+            fetch(`${API_BASE}/sessions/${currentSession.id}/evaluate`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'attack', attacker_id: uid, target_id: tid })
+            })
+            .then(r => r.ok ? r.json() : null)
+            .then(j => { if (j?.ok) possibleAttacks.add(tid); })
+            .catch(() => {})
+        );
+    }
+
+    await Promise.all(evals);
+
+    // Paint highlights on the grid
+    const boardEl = elements.gameBoard;
+    if (!boardEl) return;
+    // Remove old highs
+    boardEl.querySelectorAll('.tbs-cell.move-hl,.tbs-cell.attack-hl')
+        .forEach(el => el.classList.remove('move-hl','attack-hl'));
+
+    // Mark moves
+    possibleMoves.forEach(key => {
+        const el = boardEl.querySelector(`.tbs-cell[data-pos="${key}"]`);
+        if (el) {
+            el.classList.add('move-hl');
+            el.onclick = async () => {
+                await submitAction({ type: 'move', unit_id: uid, to: { x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) } });
+            };
+        }
+    });
+    // Mark attacks
+    for (const tid of possibleAttacks) {
+        const t = state.units[tid];
+        const key = `${t.pos.x},${t.pos.y}`;
+        const el = boardEl.querySelector(`.tbs-cell[data-pos="${key}"]`);
+        if (el) {
+            el.classList.add('attack-hl');
+            el.onclick = async () => {
+                await submitAction({ type: 'attack', attacker_id: uid, target_id: tid });
+            };
+        }
     }
 }
 
@@ -233,7 +300,7 @@ function displayGameBoard() {
     // Chess click handlers
     if (currentRuleset === 'chess') {
         clearChessHighlights();
-        elements.gameBoard.querySelectorAll('.chess-board .piece').forEach(el => {
+        elements.gameBoard.querySelectorAll('.chess-board .sq').forEach(el => {
             const sq = el.getAttribute('data-square');
             if (!sq) return;
             el.addEventListener('click', () => handleChessSquareClick(sq));
@@ -243,34 +310,19 @@ function displayGameBoard() {
 
 function displayChessBoard(board) {
     let html = '<div class="chess-board">';
-    html += '<div style="margin-bottom: 10px; font-weight: bold;">Chess Board</div>';
-
+    html += '<div class="chess-grid">';
     for (let rank = 8; rank >= 1; rank--) {
-        html += `<span style="display: inline-block; width: 20px;">${rank}</span>`;
         for (let file = 0; file < 8; file++) {
             const square = String.fromCharCode(97 + file) + rank;
             const piece = board[square];
             const isLight = (file + rank) % 2 === 0;
-
-            let cellClass = `piece ${isLight ? 'light' : 'dark'}`;
-            let cellContent = '';
-
-            if (piece && piece.type && piece.color) {
-                const pieceKey = `${piece.color}_${piece.type}`;
-                cellContent = getChessPieceSymbol(pieceKey);
-            }
-
-            html += `<span class="${cellClass}" data-square="${square}" title="${square}">${cellContent}</span>`;
+            const sqCls = `sq ${isLight ? 'light' : 'dark'}`;
+            const glyph = (piece && piece.type && piece.color) ? getChessPieceSymbol(`${piece.color}_${piece.type}`) : '';
+            html += `<div class="${sqCls}" data-square="${square}" title="${square}">` +
+                    (glyph ? `<span class="glyph">${glyph}</span>` : '') + `</div>`;
         }
-        html += '<br>';
     }
-
-    html += '<span style="display: inline-block; width: 20px;"></span>';
-    for (let file = 0; file < 8; file++) {
-        html += `<span style="display: inline-block; width: 35px; text-align: center; font-weight: bold;">${String.fromCharCode(97 + file)}</span>`;
-    }
-
-    html += '</div>';
+    html += '</div></div>';
     return html;
 }
 
@@ -278,7 +330,7 @@ function displayChessBoard(board) {
 function clearChessHighlights() {
     const boardEl = elements.gameBoard;
     if (!boardEl) return;
-    boardEl.querySelectorAll('.piece.selected,.piece.highlight-move,.piece.highlight-capture')
+    boardEl.querySelectorAll('.sq.selected,.sq.highlight-move,.sq.highlight-capture')
         .forEach(el => el.classList.remove('selected','highlight-move','highlight-capture'));
     chessSelection = { from: null, moves: new Set() };
 }
@@ -341,10 +393,10 @@ async function handleChessSquareClick(square) {
 
     // Highlight squares
     legalMoves.forEach(dst => {
-        const el = document.querySelector(`[data-square="${dst}"]`);
+    const el = document.querySelector(`[data-square="${dst}"]`);
         if (!el) return;
-        if (board[dst]) el.classList.add('highlight-capture');
-        else el.classList.add('highlight-move');
+    if (board[dst]) el.classList.add('highlight-capture');
+    else el.classList.add('highlight-move');
     });
 }
 
@@ -528,6 +580,25 @@ async function submitAction(action) {
         currentSession = updatedSession;
         displayGameSession();
 
+        // TBS: if active unit is out of AP after action, auto end turn
+        if (currentRuleset === 'tbs') {
+            try {
+                const st = currentSession.state;
+                const uid = st?.turn_order?.[st?.active_index];
+                const u = uid ? st?.units?.[uid] : null;
+                if (u && u.ap <= 0 && st?.status !== 'finished') {
+                    const endRes = await fetch(`${API_BASE}/sessions/${currentSession.id}/action`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'end_turn' })
+                    });
+                    if (endRes.ok) {
+                        currentSession = await endRes.json();
+                        displayGameSession();
+                    }
+                }
+            } catch (e) { console.warn('auto end turn', e); }
+        }
+
         // After a successful player move in chess, trigger AI if it's now black's turn
         if (currentRuleset === 'chess' && currentSession?.state?.turn === 'black' && !currentSession?.state?.winner) {
             await maybeTriggerBlackAI();
@@ -615,76 +686,9 @@ async function maybeTriggerBlackAI() {
     }
 }
 
-function toggleTbsActionFields() {
-    const actionType = elements.tbsActionType.value;
+// Removed old TBS dropdown flows; board is fully click-driven now.
 
-    if (actionType === 'move') {
-        elements.moveFields.style.display = 'block';
-        elements.attackFields.style.display = 'none';
-        elements.unitSelection.style.display = 'block';
-        elements.submitTbsAction.textContent = 'Submit Move';
-    } else if (actionType === 'attack') {
-        elements.moveFields.style.display = 'none';
-        elements.attackFields.style.display = 'block';
-        elements.unitSelection.style.display = 'block';
-        elements.submitTbsAction.textContent = 'Submit Attack';
-    } else if (actionType === 'end_turn') {
-        elements.moveFields.style.display = 'none';
-        elements.attackFields.style.display = 'none';
-        elements.unitSelection.style.display = 'none';
-        elements.submitTbsAction.textContent = 'End Turn';
-    } else {
-        elements.moveFields.style.display = 'none';
-        elements.attackFields.style.display = 'none';
-        elements.unitSelection.style.display = 'none';
-        elements.submitTbsAction.textContent = 'Submit Action';
-    }
-
-    // Clear selections when changing action type
-    if (elements.tbsUnitSelect) elements.tbsUnitSelect.value = '';
-    if (elements.tbsMoveSelect) elements.tbsMoveSelect.value = '';
-    if (elements.tbsTargetSelect) elements.tbsTargetSelect.value = '';
-    currentEvaluation = null;
-    hideEvaluation();
-}
-
-function populateUnitDropdowns() {
-    if (!currentSession || !currentSession.state) return;
-
-    try {
-    if (currentRuleset === 'tbs') {
-            populateTbsUnits();
-        }
-    } catch (error) {
-        console.error('Error populating unit dropdowns:', error);
-        showErrorMessage('Error loading game pieces/units');
-    }
-}
-
-function populateTbsUnits() {
-    if (!elements.tbsUnitSelect || !currentSession.state.units) return;
-
-    try {
-        const select = elements.tbsUnitSelect;
-        select.innerHTML = '<option value="">Choose a unit...</option>';
-
-        // Get all units
-        Object.entries(currentSession.state.units).forEach(([unitId, unit]) => {
-            if (unit.hp > 0) { // Only show alive units
-                const option = document.createElement('option');
-                option.value = unitId;
-                option.textContent = `${unit.name} (${unit.side}) - HP: ${unit.hp}/${unit.max_hp}`;
-                select.appendChild(option);
-            }
-        });
-    } catch (error) {
-        console.error('Error populating TBS units:', error);
-        showErrorMessage('Error loading game units');
-        if (elements.tbsUnitSelect) {
-            elements.tbsUnitSelect.innerHTML = '<option value="">Error loading units...</option>';
-        }
-    }
-}
+function populateUnitDropdowns() { /* no-op for TBS now */ }
 
 
 async function onTbsUnitSelected() {

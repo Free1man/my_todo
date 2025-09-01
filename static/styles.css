@@ -122,59 +122,55 @@ h1, h2, h3 {
     border: 1px solid #dee2e6;
 }
 
-.chess-board {
-    font-family: 'Segoe UI Symbol', 'Arial Unicode MS', sans-serif;
-    font-size: 18px;
-    line-height: 1.2;
-    white-space: pre;
+/* New fixed chess grid */
+.chess-board { /* container */
+    display: inline-block;
+    padding: 12px;
     background: #f8f9fa;
-    padding: 15px;
-    border-radius: 8px;
     border: 2px solid #dee2e6;
-    display: inline-block;
-    font-weight: bold;
-    letter-spacing: 2px;
+    border-radius: 8px;
 }
 
-.chess-board .piece {
-    display: inline-block;
-    width: 35px;
-    height: 35px;
-    text-align: center;
-    line-height: 35px;
-    margin: 1px;
-    border-radius: 4px;
-    font-size: 28px;
-    font-weight: bold;
+.chess-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 56px);
+    grid-auto-rows: 56px;
+    gap: 0;
+    border: 2px solid #444;
+}
+
+.chess-grid .sq {
+    position: relative;
+    width: 56px; height: 56px;
+    display: flex; align-items: center; justify-content: center;
+    box-sizing: border-box;
     cursor: pointer;
+    user-select: none;
 }
 
-.chess-board .piece.light {
-    background-color: #f0d9b5;
+.chess-grid .sq.light { background: #f0d9b5; }
+.chess-grid .sq.dark  { background: #b58863; }
+
+.chess-grid .glyph {
+    font-family: 'Segoe UI Symbol', 'Arial Unicode MS', sans-serif;
+    font-size: 38px; line-height: 1;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.2);
+    pointer-events: none;
 }
 
-.chess-board .piece.dark {
-    background-color: #b58863;
+/* Highlight rings without shifting layout */
+.chess-grid .sq.selected::after,
+.chess-grid .sq.highlight-move::after,
+.chess-grid .sq.highlight-capture::after {
+    content: "";
+    position: absolute; inset: 6px;
+    border-radius: 6px;
+    pointer-events: none;
 }
 
-.chess-board .piece:hover {
-    box-shadow: 0 0 5px rgba(0,0,0,0.5);
-}
-
-/* Chess click UX */
-.chess-board .piece.selected {
-    outline: 3px solid #2ecc71;
-}
-
-.chess-board .piece.highlight-move {
-    box-shadow: inset 0 0 0 3px rgba(46, 204, 113, 0.9);
-    position: relative;
-}
-
-.chess-board .piece.highlight-capture {
-    box-shadow: inset 0 0 0 3px rgba(231, 76, 60, 0.9);
-    position: relative;
-}
+.chess-grid .sq.selected::after { border: 3px solid #1e90ff; }
+.chess-grid .sq.highlight-move::after { box-shadow: inset 0 0 0 4px rgba(46, 204, 113, 0.7); }
+.chess-grid .sq.highlight-capture::after { box-shadow: inset 0 0 0 4px rgba(231, 76, 60, 0.8); }
 
 .tbs-grid {
     display: inline-grid;
@@ -196,13 +192,11 @@ h1, h2, h3 {
     font-weight: bold;
     border-radius: 4px;
     cursor: pointer;
-    transition: all 0.2s;
+    box-sizing: border-box;
+    transition: box-shadow 0.15s ease-in-out;
 }
 
-.tbs-cell:hover {
-    transform: scale(1.1);
-    box-shadow: 0 0 8px rgba(0,0,0,0.3);
-}
+.tbs-cell:hover { box-shadow: 0 0 8px rgba(0,0,0,0.25); }
 
 .tbs-cell.obstacle {
     background: #7f8c8d;
@@ -231,6 +225,10 @@ h1, h2, h3 {
 .tbs-cell.empty:hover {
     background: #d5dbdb;
 }
+
+/* TBS highlights (non-shifting) */
+.tbs-cell.move-hl { box-shadow: inset 0 0 0 3px rgba(46, 204, 113, 0.85); }
+.tbs-cell.attack-hl { box-shadow: inset 0 0 0 3px rgba(231, 76, 60, 0.9); }
 
 .game-controls {
     flex: 1;
