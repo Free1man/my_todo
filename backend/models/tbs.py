@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import List
+from typing import List, Optional, Literal
+from enum import Enum
 from pydantic import BaseModel, Field
 from .common import (
     Aura, GoalKind, MapGrid, Mission, MissionEvent, MissionGoal,
@@ -10,6 +11,92 @@ from .common import (
 class TBSSession(BaseModel):
     id: str
     mission: Mission
+
+# ---------------- Explainable evaluation models ----------------
+
+class TermKind(str, Enum):
+    BASE = "base"
+    ITEM = "item"
+    ARTIFACT = "artifact"
+    BUFF = "buff"
+    DEBUFF = "debuff"
+    STANCE = "stance"
+    TERRAIN = "terrain"
+    CONTEXT = "context"
+    SKILL = "skill"
+    OTHER = "other"
+
+class Op(str, Enum):
+    FLAT = "flat"              # +N
+    MULT = "mult"              # +X% applied before final
+    FINAL_MULT = "final_mult"  # +Y% applied at the very end
+
+class StatTerm(BaseModel):
+    kind: TermKind
+    source: str
+    op: Op
+    value: float
+    note: Optional[str] = None
+
+class StatBreakdown(BaseModel):
+    name: str
+    base: float
+    terms: List[StatTerm] = Field(default_factory=list)
+    result: float
+
+class ResistEntry(BaseModel):
+    damage_type: Literal["physical", "magic", "true"]
+    mult: float
+    source: str
+
+class Penetration(BaseModel):
+    flat: float = 0.0
+    pct: float = 0.0
+
+class DamageBreakdown(BaseModel):
+    damage_type: Literal["physical", "magic", "true"] = "physical"
+    attack: StatBreakdown
+    defense: StatBreakdown
+    penetration: Penetration
+    pre_mitigation: float
+    effective_defense: float
+    raw_after_def: float
+    skill_ratio: float
+    flat_power: float
+    vulnerability_mults: List[ResistEntry] = Field(default_factory=list)
+    attacker_damage_mults: List[StatTerm] = Field(default_factory=list)
+    final_before_crit: float
+    crit_chance: float
+    crit_mult: float
+    crit_expected: float
+    block_flat: float
+    block_mult: float
+    final_after_block: float
+    min_cap: Optional[float] = 1.0
+    max_cap: Optional[float] = None
+    final_capped: float
+    immune: bool = False
+
+class HitChanceBreakdown(BaseModel):
+    accuracy: StatBreakdown
+    evasion: StatBreakdown
+    base: float
+    mods: List[StatTerm] = Field(default_factory=list)
+    result: float
+
+class ActionEvaluation(BaseModel):
+    action_type: Literal["attack", "skill", "item", "wait"] = "attack"
+    attacker_id: str
+    target_id: Optional[str] = None
+    ap_cost: int
+    summary: str
+    expected_damage: float
+    min_damage: float
+    max_damage: float
+    damage: Optional[DamageBreakdown] = None
+    hit: Optional[HitChanceBreakdown] = None
+    legality_ok: bool = True
+    illegal_reasons: List[str] = Field(default_factory=list)
 
 def default_demo_mission() -> Mission:
     width, height = 8, 8

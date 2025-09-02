@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Tuple, Literal
 
 from .common import Mission, MissionStatus
+from .tbs import ActionEvaluation
 
 # ----- Actions (discriminated union) -----
 
@@ -56,6 +57,7 @@ class ApplyActionResponse(BaseModel):
 class LegalAction(BaseModel):
     action: Action
     explanation: str  # already evaluated and legal
+    evaluation: Optional[ActionEvaluation] = None
 
 class LegalActionsResponse(BaseModel):
     actions: List[LegalAction]

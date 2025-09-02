@@ -17,6 +17,7 @@ from tests.integration.utils.helpers import (
     _evaluate,
     _hp_of,
 )
+import requests as _requests
 
 
 # ---------- tests ----------
@@ -48,12 +49,34 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
     ex = _evaluate(base_url, sid, atk_payload)
     assert ex.get("legal"), f"expected legal attack, got {ex}"
 
+    # Explainable evaluation via legal_actions?explain=true
+    la = _requests.get(f"{base_url}/sessions/{sid}/legal_actions", params={"explain": "true"}, timeout=5)
+    la.raise_for_status()
+    acts = la.json()["actions"]
+    # find our attack action entry
+    evj = next(
+        (a.get("evaluation") for a in acts
+         if a.get("action", {}).get("kind") == "ATTACK"
+         and a.get("action", {}).get("attacker_id") == attacker.id
+         and a.get("action", {}).get("target_id") == target.id),
+        None,
+    )
+    assert evj is not None, f"expected evaluation for ATTACK {attacker.id}->{target.id}"
+    assert evj["action_type"] == "attack"
+    assert evj["attacker_id"] == attacker.id and evj["target_id"] == target.id
+    assert isinstance(evj.get("expected_damage"), (int, float))
+    assert "Hit" in evj.get("summary", "")
+
     sess = _apply(base_url, sid, atk_payload)
     hp_after = _hp_of(sess, target.id)
 
     # 5. Confirm damage
     expected_damage = 5
-    assert hp_before - hp_after == expected_damage, f"Expected {expected_damage} damage, but got {hp_before - hp_after}"
+    actual = hp_before - hp_after
+    assert actual == expected_damage, f"Expected {expected_damage} damage, but got {actual}"
+    # Expected damage preview should be within the min..max range and close to actual (same in this simple model)
+    assert evj["min_damage"] <= evj["expected_damage"] <= evj["max_damage"]
+    assert int(evj["expected_damage"]) == actual
 
 def test_melee_out_of_range_attack_rejected(base_url: str):
     # 1. Setup units
@@ -118,10 +141,28 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     assert ex2.get("legal"), f"expected legal ranged attack, got {ex2}"
 
     hp_before = _hp_of(sess, melee_unit.id)
+    # Check explainable evaluation via legal_actions
+    la = _requests.get(f"{base_url}/sessions/{sid}/legal_actions", params={"explain": "true"}, timeout=5)
+    la.raise_for_status()
+    acts = la.json()["actions"]
+    evj = next(
+        (a.get("evaluation") for a in acts
+         if a.get("action", {}).get("kind") == "ATTACK"
+         and a.get("action", {}).get("attacker_id") == ranged_unit.id
+         and a.get("action", {}).get("target_id") == melee_unit.id),
+        None,
+    )
+    assert evj is not None
+    assert evj["action_type"] == "attack"
+    assert evj["attacker_id"] == ranged_unit.id and evj["target_id"] == melee_unit.id
+    assert evj["min_damage"] <= evj["expected_damage"] <= evj["max_damage"]
+    assert evj["hit"]["result"] == 100
     sess = _apply(base_url, sid, atk_ok_payload)
     hp_after = _hp_of(sess, melee_unit.id)
 
-    assert hp_before - hp_after == 3, f"expected 3 damage, got {hp_before - hp_after}"
+    actual = hp_before - hp_after
+    assert actual == 3, f"expected 3 damage, got {actual}"
+    assert int(evj["expected_damage"]) == actual
 
 def test_initiative_and_turn_order(base_url: str):
     # 1. Setup units with different initiative scores

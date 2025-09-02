@@ -115,11 +115,11 @@ def evaluate_action(sid: str, req: EvaluateRequest):
     return engine.evaluate(sess, req.action)
 
 @app.get("/sessions/{sid}/legal_actions", response_model=LegalActionsResponse)
-def list_legal_actions(sid: str):
+def list_legal_actions(sid: str, explain: bool = False):
     sess = storage.get(sid)
     if not sess:
         raise HTTPException(404, "session not found")
-    return engine.list_legal_actions(sess)
+    return engine.list_legal_actions(sess, explain=explain)
 
 @app.post("/sessions/{sid}/action", response_model=ApplyActionResponse)
 def apply_action(sid: str, req: ApplyActionRequest):
@@ -137,3 +137,5 @@ def apply_action(sid: str, req: ApplyActionRequest):
 
 # Serve static UI under /static (so API routes remain clean)
 app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+
+# (Removed standalone /tbs/evaluate; use /sessions/{sid}/legal_actions?explain=true instead)
