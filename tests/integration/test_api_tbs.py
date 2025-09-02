@@ -82,8 +82,7 @@ def _simple_mission(units: list[Unit], width: int = 3, height: int = 3) -> Missi
     return Mission(
         id="m.test", name="Test Mission", map=grid, units=unit_map,
         side_to_move=Side.PLAYER,
-        goals=[MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)],
-        current_unit_id=next(iter(unit_map)) # default to first unit
+        goals=[MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)]
     )
 
 # ---------- tests ----------
@@ -155,6 +154,7 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     # 2. Customize and assign items
     melee_unit.pos = (0, 0)
     melee_unit.items = [] # No items
+    melee_unit.stats.base[StatName.INIT] = 100
 
     ranged_unit.pos = (0, 2)
     ranged_unit.items = [short_bow_template()] 
@@ -188,3 +188,42 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     hp_after = _hp_of(sess, melee_unit.id)
 
     assert hp_before - hp_after == 3, f"expected 3 damage, got {hp_before - hp_after}"
+
+def test_initiative_and_turn_order(base_url: str):
+    # 1. Setup units with different initiative scores
+    unit_fast = hero_template()
+    unit_fast.id = "unit_fast"
+    unit_fast.stats.base[StatName.INIT] = 20
+
+    unit_mid = goblin_template()
+    unit_mid.id = "unit_mid"
+    unit_mid.stats.base[StatName.INIT] = 15
+
+    unit_slow = archer_template()
+    unit_slow.id = "unit_slow"
+    unit_slow.stats.base[StatName.INIT] = 10
+
+    # 2. Create mission - order of units in list shouldn't matter
+    mission = _simple_mission([unit_slow, unit_mid, unit_fast])
+
+    # 3. Create session and check initial state
+    # Engine should sort by INIT: fast, mid, slow
+    sid, sess = _create_tbs_session(base_url, mission)
+    assert sess['mission']['turn'] == 1
+    assert sess['mission']['current_unit_id'] == "unit_fast"
+
+    # 4. End turn 1 (fast -> mid)
+    end_turn_action = {"kind": "END_TURN"}
+    sess = _apply(base_url, sid, end_turn_action)
+    assert sess['mission']['turn'] == 1
+    assert sess['mission']['current_unit_id'] == "unit_mid"
+
+    # 5. End turn 2 (mid -> slow)
+    sess = _apply(base_url, sid, end_turn_action)
+    assert sess['mission']['turn'] == 1
+    assert sess['mission']['current_unit_id'] == "unit_slow"
+
+    # 6. End turn 3 (slow -> fast, wraps around to a new turn)
+    sess = _apply(base_url, sid, end_turn_action)
+    assert sess['mission']['turn'] == 2
+    assert sess['mission']['current_unit_id'] == "unit_fast"

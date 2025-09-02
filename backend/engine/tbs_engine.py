@@ -239,10 +239,11 @@ class TBSEngine:
     def _unit_can_act(self, mission: Mission, u: Unit) -> bool:
         if not u.alive:
             return False
+        # If initiative is set, only the current unit can act.
         if mission.current_unit_id:
             return mission.current_unit_id == u.id
-        # fallback if no initiative yet
-        return True
+        # Fallback: if no unit is active, no unit can act.
+        return False
 
     def _neighbors(self, grid: MapGrid, c: Coord) -> List[Coord]:
         x, y = c
@@ -378,12 +379,21 @@ class TBSEngine:
             idx = order.index(mission.current_unit_id) if mission.current_unit_id in order else -1
         except ValueError:
             idx = -1
+        
         # find next living unit in order
         n = len(order)
+        if n == 0:
+            mission.current_unit_id = None
+            return
+
         for step in range(1, n + 1):
-            candidate_id = order[(idx + step) % n]
+            next_idx = (idx + step) % n
+            candidate_id = order[next_idx]
             cu = mission.units.get(candidate_id)
             if cu and cu.alive:
+                # If we wrapped around, it's a new turn
+                if next_idx <= idx:
+                    mission.turn += 1
                 mission.current_unit_id = candidate_id
                 cu.ap_left = self._eff_stat(mission, cu, StatName.AP)
                 mission.side_to_move = cu.side
