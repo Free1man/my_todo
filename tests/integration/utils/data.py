@@ -1,14 +1,20 @@
-# tests/integration/templates.py
+# tests/integration/utils/data.py
 from __future__ import annotations
 from backend.models.common import (
+    GoalKind,
     Item,
-    Unit,
-    StatBlock,
-    StatName,
-    Side,
+    MapGrid,
+    Mission,
+    MissionGoal,
     Operation,
-    ModifierSource,
+    Side,
+    StatBlock,
     StatModifier,
+    StatName,
+    Terrain,
+    Tile,
+    Unit,
+    ModifierSource,
 )
 
 # ----- Item Templates -----
@@ -63,4 +69,19 @@ def goblin_template() -> Unit:
             StatName.MOV: 3, StatName.RNG: 1, StatName.CRIT: 0, StatName.INIT: 9
         }),
         ap_left=2
+    )
+
+# ----- Mission Templates -----
+
+def simple_mission(units: list[Unit], width: int = 3, height: int = 3) -> Mission:
+    grid = MapGrid(
+        width=width,
+        height=height,
+        tiles=[[Tile(terrain=Terrain.PLAIN) for _ in range(width)] for _ in range(height)]
+    )
+    unit_map = {u.id: u for u in units}
+    return Mission(
+        id="m.test", name="Test Mission", map=grid, units=unit_map,
+        side_to_move=Side.PLAYER,
+        goals=[MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)]
     )
