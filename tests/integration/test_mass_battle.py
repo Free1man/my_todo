@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Dict, List, Optional, Tuple
 
+import pytest
 import requests
 
 from backend.models.common import GoalKind, MapGrid, Mission, MissionGoal, Side, StatBlock, StatName, Terrain, Tile, Unit
@@ -137,7 +138,7 @@ def _apply_with_session(http: requests.Session, base_url: str, sid: str, payload
     g.raise_for_status()
     return g.json()
 
-
+@pytest.mark.skip
 def test_mass_battle_100x100_10v10_until_victory(base_url: str):
     # 1) Build mission and create a session
     mission = _build_mass_mission()

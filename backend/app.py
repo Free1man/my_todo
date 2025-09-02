@@ -107,8 +107,6 @@ def get_session(sid: str):
         raise HTTPException(404, "session not found")
     return SessionView(id=sess.id, mission=sess.mission)
 
-# (Removed deprecated /sessions/{sid}/evaluate`; use `/sessions/{sid}/legal_actions` instead)
-
 @app.get("/sessions/{sid}/legal_actions", response_model=LegalActionsResponse)
 def list_legal_actions(sid: str, explain: bool = False):
     sess = storage.get(sid)

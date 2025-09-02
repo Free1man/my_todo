@@ -62,7 +62,7 @@ def delete(sid: str) -> bool:
     return bool(res and res[0])
 
 def list_all() -> List[TBSSession]:
-    sids = r.zrange(INDEX, 0, -1)
+    sids = r.zrevrange(INDEX, 0, -1)
     if not sids:
         return []
     raw_sessions = r.mget([_k(sid) for sid in sids])

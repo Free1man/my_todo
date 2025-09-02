@@ -1,5 +1,6 @@
 <!doctype html>
 <html>
+
 <head>
   <meta charset="utf-8" />
   <title>TBS Demo</title>
@@ -7,65 +8,305 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsoneditor@9.10.0/dist/jsoneditor.min.css">
   <script src="https://cdn.jsdelivr.net/npm/jsoneditor@9.10.0/dist/jsoneditor.min.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 20px; max-width: 800px; }
-    #grid { display: grid; grid-auto-rows: 32px; grid-auto-columns: 32px; gap: 1px; margin: 10px 0; border: 1px solid #ccc; }
-    .tile { width:32px; height:32px; display:flex; align-items:center; justify-content:center; border:1px solid #ddd; font-size:10px; position: relative; }
-    .WATER { background:#7ec8e3; }
-    .BLOCKED { background:#666; color:#fff; }
-    .PLAIN { background:#f5f5f5; }
-    .FOREST { background:#8bc34a; }
-    .HILL { background:#ff9800; }
-  /* Selected/current highlights on the TILE to cover full square */
-  .tile.selected { box-shadow: inset 0 0 0 3px #4caf50; }
-  .tile.current { box-shadow: inset 0 0 0 2px #2196f3; }
-  .u { border-radius: 4px; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-weight: 600; font-size: 11px; position: relative; border: 1px solid rgba(0,0,0,0.08); z-index: 1; }
-    .PLAYER { background:#4caf50; color:#fff; }
-  .ENEMY { background:#7e57c2; color:#fff; }
-    .NEUTRAL { background:#9e9e9e; color:#fff; }
-    .dead { opacity: 0.3; }
-    .panel { display:flex; gap:12px; margin: 8px 0; align-items: center; flex-wrap: wrap; }
-    button { padding: 6px 12px; cursor:pointer; background: #2196f3; color: white; border: none; border-radius: 4px; }
-    button:hover { background: #1976d2; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
-    .status { background: #f5f5f5; padding: 8px; border-radius: 4px; font-size: 14px; }
-    .unit-info { background: #e8f5e8; padding: 8px; border-radius: 4px; }
-  .log { background: #f9f9f9; border: 1px solid #ddd; padding: 8px; height: 160px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; text-align: left; }
-  .log-entry { padding: 6px 8px; border-bottom: 1px dashed #e0e0e0; border-left: 3px solid transparent; white-space: pre-wrap; word-break: break-word; }
-  .log-entry:last-child { border-bottom: none; }
-  .log-entry.success { background: #e8f5e9; color: #1b5e20; border-left-color: #2e7d32; }
-  .log-entry.warn { background: #fff8e1; color: #5d4037; border-left-color: #f9a825; }
-  .log-entry.error { background: #fde7e7; color: #b71c1c; border-left-color: #d32f2f; }
-    .action-btn { padding: 4px 8px; font-size: 12px; }
-  /* Initiative queue */
-  .queue { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
-  .queue-item { padding: 2px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f7f7f7; }
-  .queue-item.current { border-color: #2196f3; background: #e3f2fd; }
-  .queue-item.dead { opacity: 0.5; text-decoration: line-through; }
-  /* Active unit card */
-  .unit-card { background: #fff; border:1px solid #e0e0e0; border-radius:6px; padding:8px; min-width: 280px; font-size: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
-  .unit-card h3 { margin: 0 0 4px; font-size: 14px; }
-  .unit-card .meta { color:#555; font-size:11px; margin-bottom:6px; }
-  .unit-card .stats-grid { display:grid; grid-template-columns: repeat(4, auto); gap:4px 10px; margin-bottom:6px; }
-  .unit-card .section-title { font-weight: 600; margin: 6px 0 4px; color:#444; font-size: 12px; }
-  .chip { display:inline-block; padding:2px 6px; border:1px solid #e0e0e0; border-radius: 10px; background:#f5f7fa; margin:2px 4px 0 0; font-size: 11px; white-space: nowrap; }
-  /* Board + sidebar */
-  .board-row { display:flex; align-items: flex-start; gap: 16px; }
-  .sidebar { flex: 0 0 300px; width: 300px; display:flex; flex-direction: column; gap: 12px; }
-  @media (max-width: 900px) { .board-row { flex-direction: column; } .sidebar { width: 100%; } }
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 20px;
+      max-width: 800px;
+    }
 
-  /* Move/attack hints */
-  .tile.move { background: #e6f4ea; box-shadow: inset 0 0 0 2px rgba(76,175,80,0.35); }
-  .tile .ring { position:absolute; width:26px; height:26px; border:3px solid #ef5350; border-radius:50%; pointer-events:none; box-shadow: 0 0 6px rgba(239,83,80,0.6); z-index: 2; }
+    #grid {
+      display: grid;
+      grid-auto-rows: 32px;
+      grid-auto-columns: 32px;
+      gap: 1px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+    }
+
+    .tile {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #ddd;
+      font-size: 10px;
+      position: relative;
+    }
+
+    .WATER {
+      background: #7ec8e3;
+    }
+
+    .BLOCKED {
+      background: #666;
+      color: #fff;
+    }
+
+    .PLAIN {
+      background: #f5f5f5;
+    }
+
+    .FOREST {
+      background: #8bc34a;
+    }
+
+    .HILL {
+      background: #ff9800;
+    }
+
+    /* Selected/current highlights on the TILE to cover full square */
+    .tile.selected {
+      box-shadow: inset 0 0 0 3px #4caf50;
+    }
+
+    .tile.current {
+      box-shadow: inset 0 0 0 2px #2196f3;
+    }
+
+    .u {
+      border-radius: 4px;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 11px;
+      position: relative;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      z-index: 1;
+    }
+
+    .PLAYER {
+      background: #4caf50;
+      color: #fff;
+    }
+
+    .ENEMY {
+      background: #7e57c2;
+      color: #fff;
+    }
+
+    .NEUTRAL {
+      background: #9e9e9e;
+      color: #fff;
+    }
+
+    .dead {
+      opacity: 0.3;
+    }
+
+    .panel {
+      display: flex;
+      gap: 12px;
+      margin: 8px 0;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 6px 12px;
+      cursor: pointer;
+      background: #2196f3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+
+    button:hover {
+      background: #1976d2;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .status {
+      background: #f5f5f5;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .unit-info {
+      background: #e8f5e8;
+      padding: 8px;
+      border-radius: 4px;
+    }
+
+    .log {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      padding: 8px;
+      height: 160px;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      text-align: left;
+    }
+
+    .log-entry {
+      padding: 6px 8px;
+      border-bottom: 1px dashed #e0e0e0;
+      border-left: 3px solid transparent;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-entry.success {
+      background: #e8f5e9;
+      color: #1b5e20;
+      border-left-color: #2e7d32;
+    }
+
+    .log-entry.warn {
+      background: #fff8e1;
+      color: #5d4037;
+      border-left-color: #f9a825;
+    }
+
+    .log-entry.error {
+      background: #fde7e7;
+      color: #b71c1c;
+      border-left-color: #d32f2f;
+    }
+
+    .action-btn {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
+    /* Initiative queue */
+    .queue {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .queue-item {
+      padding: 2px 6px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 11px;
+      background: #f7f7f7;
+    }
+
+    .queue-item.current {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+
+    .queue-item.dead {
+      opacity: 0.5;
+      text-decoration: line-through;
+    }
+
+    /* Active unit card */
+    .unit-card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 8px;
+      min-width: 280px;
+      font-size: 12px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+
+    .unit-card h3 {
+      margin: 0 0 4px;
+      font-size: 14px;
+    }
+
+    .unit-card .meta {
+      color: #555;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+
+    .unit-card .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, auto);
+      gap: 4px 10px;
+      margin-bottom: 6px;
+    }
+
+    .unit-card .section-title {
+      font-weight: 600;
+      margin: 6px 0 4px;
+      color: #444;
+      font-size: 12px;
+    }
+
+    .chip {
+      display: inline-block;
+      padding: 2px 6px;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      background: #f5f7fa;
+      margin: 2px 4px 0 0;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    /* Board + sidebar */
+    .board-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .sidebar {
+      flex: 0 0 300px;
+      width: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    @media (max-width: 900px) {
+      .board-row {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+      }
+    }
+
+    /* Move/attack hints */
+    .tile.move {
+      background: #e6f4ea;
+      box-shadow: inset 0 0 0 2px rgba(76, 175, 80, 0.35);
+    }
+
+    .tile .ring {
+      position: absolute;
+      width: 26px;
+      height: 26px;
+      border: 3px solid #ef5350;
+      border-radius: 50%;
+      pointer-events: none;
+      box-shadow: 0 0 6px rgba(239, 83, 80, 0.6);
+      z-index: 2;
+    }
   </style>
 </head>
+
 <body>
   <h1>Turn-Based Strategy Demo</h1>
 
   <div id="sessions">
     <div class="panel">
       <strong>Existing Sessions</strong>
-  <button id="new" type="button">New Game</button>
-  <button id="create-session" type="button">Create Session</button>
+      <button id="new" type="button">New Game</button>
+      <button id="create-session" type="button">Create Session</button>
       <button id="refresh-sessions" class="action-btn">Refresh</button>
     </div>
     <div id="sessions-list" class="panel" style="flex-direction: column; align-items: stretch;"></div>
@@ -87,7 +328,8 @@
         <button id="collapse-all" class="action-btn" type="button">Collapse All</button>
       </div>
       <div id="create-editor" style="width:100%; min-height: 360px; border:1px solid #e0e0e0; border-radius:4px;"></div>
-      <textarea id="create-json" spellcheck="false" style="display:none; width:100%; min-height: 360px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace; font-size: 12px; padding:8px;"></textarea>
+      <textarea id="create-json" spellcheck="false"
+        style="display:none; width:100%; min-height: 360px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace; font-size: 12px; padding:8px;"></textarea>
       <div class="panel">
         <button id="submit-session" type="button">Submit</button>
         <span id="create-status" class="status" style="display:none;"></span>
@@ -98,8 +340,8 @@
   <div id="game" style="display:none;">
     <div class="panel">
       <button id="end-turn" type="button" disabled>End Turn</button>
-  <button id="legal" type="button">Show Legal Actions</button>
-  <button id="show-sessions" type="button">Show Sessions</button>
+      <button id="legal" type="button">Show Legal Actions</button>
+      <button id="show-sessions" type="button">Show Sessions</button>
       <div class="status">
         <span>Session: <b id="sid">-</b></span> |
         <span>Turn: <b id="turn">-</b></span> |
@@ -129,211 +371,211 @@
     <div class="log" id="log"></div>
   </div>
 
-<script>
-let SID = null;
-let STATE = null;
-let SELECTED = null;
-let LEGAL_ACTIONS = [];
-let MOVE_HINTS = new Set();
-let ATTACK_HINTS = new Map(); // key: "x,y" => target unit id
-let CREATE_EDITOR = null; // JSONEditor instance when using tree mode
+  <script>
+    let SID = null;
+    let STATE = null;
+    let SELECTED = null;
+    let LEGAL_ACTIONS = [];
+    let MOVE_HINTS = new Set();
+    let ATTACK_HINTS = new Map(); // key: "x,y" => target unit id
+    let CREATE_EDITOR = null; // JSONEditor instance when using tree mode
 
-async function api(path, opts={}) {
-  const r = await fetch(path, {headers:{'content-type':'application/json'}, ...opts});
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-
-function log(msg, level) {
-  const p = document.getElementById('log');
-  const time = new Date().toLocaleTimeString();
-
-  let cls = level || 'info';
-  const m = String(msg).toLowerCase();
-  const negatives = ['error', 'not legal', 'failed', 'invalid', 'cannot', "can't", 'out of range', 'unknown', 'missing'];
-  if (!level && negatives.some(k => m.includes(k))) cls = 'error';
-
-  const div = document.createElement('div');
-  div.className = 'log-entry' + (cls && cls !== 'info' ? ' ' + cls : '');
-  div.textContent = `[${time}] ${msg}`;
-
-  if (p.firstChild) p.insertBefore(div, p.firstChild); else p.appendChild(div);
-}
-
-function updateUI() {
-  document.getElementById('sid').textContent = SID || '-';
-  document.getElementById('turn').textContent = STATE ? STATE.turn : '-';
-  document.getElementById('side').textContent = STATE ? STATE.side_to_move : '-';
-  document.getElementById('current-unit').textContent = STATE?.current_unit_id ?
-    STATE.units[STATE.current_unit_id]?.name || 'unknown' : 'none';
-  document.getElementById('ap').textContent = STATE?.current_unit_id ?
-    STATE.units[STATE.current_unit_id]?.ap_left || 0 : '-';
-  document.getElementById('sel').textContent = SELECTED && STATE?.units[SELECTED] ?
-    STATE.units[SELECTED].name : 'none';
-
-  const endTurnBtn = document.getElementById('end-turn');
-  endTurnBtn.disabled = !SID;
-  renderInitiativeQueue();
-  renderActiveUnitPanel();
-}
-
-async function attemptAction(action) {
-  if (!SID) return false;
-  try {
-  // Re-evaluate before performing an action to get latest hints
-  await fetchLegalAndComputeHints();
-  const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
-    STATE = res.session.mission;
-    log(`Action applied: ${res.explanation}`, 'success');
-    updateUI();
-  await fetchLegalAndComputeHints();
-    render();
-    return true;
-  } catch (e) {
-  // Try to parse server-provided error text for user-friendly message
-  log(`Action failed: ${e.message}`, 'error');
-  // Clear hints on failure to avoid stale UI
-  MOVE_HINTS.clear();
-  ATTACK_HINTS.clear();
-  updateUI();
-  render();
-    return false;
-  }
-}
-
-function showGame() {
-  document.getElementById('sessions').style.display = 'none';
-  document.getElementById('create').style.display = 'none';
-  document.getElementById('game').style.display = '';
-}
-
-function showSessions() {
-  document.getElementById('game').style.display = 'none';
-  document.getElementById('create').style.display = 'none';
-  document.getElementById('sessions').style.display = '';
-}
-
-function showCreate() {
-  document.getElementById('sessions').style.display = 'none';
-  document.getElementById('game').style.display = 'none';
-  document.getElementById('create').style.display = '';
-}
-
-async function refreshSessions() {
-  const container = document.getElementById('sessions-list');
-  container.innerHTML = '';
-  try {
-    const sessions = await api('/sessions');
-    if (!Array.isArray(sessions) || sessions.length === 0) {
-      const empty = document.createElement('div');
-      empty.textContent = 'No sessions yet.';
-      empty.style.color = '#666';
-      container.appendChild(empty);
-      return;
+    async function api(path, opts = {}) {
+      const r = await fetch(path, { headers: { 'content-type': 'application/json' }, ...opts });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
     }
-    sessions.forEach(s => {
-      const row = document.createElement('div');
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-      row.style.justifyContent = 'space-between';
-      row.style.gap = '8px';
-      row.style.padding = '6px 8px';
-      row.style.border = '1px solid #eee';
-      row.style.borderRadius = '4px';
 
-      const info = document.createElement('div');
-      const m = s.mission || {};
-      const unitsCount = m.units ? Object.keys(m.units).length : 0;
-      info.textContent = `${s.id} — Turn ${m.turn ?? '-'} | Side ${m.side_to_move ?? '-'} | Units ${unitsCount}`;
+    function log(msg, level) {
+      const p = document.getElementById('log');
+      const time = new Date().toLocaleTimeString();
 
-    const btn = document.createElement('button');
-      btn.className = 'action-btn';
-      btn.textContent = 'Continue';
-      const doLoad = async () => {
-        try {
-          const sess = await api(`/sessions/${s.id}`);
-          SID = sess.id;
-          STATE = sess.mission;
-          SELECTED = null;
-          LEGAL_ACTIONS = [];
-          await fetchLegalAndComputeHints();
-          log(`Loaded session ${SID}`);
-          updateUI();
-          render();
-      showGame();
-      document.getElementById('game').scrollIntoView({behavior:'smooth', block:'start'});
-        } catch (e) {
-          log(`Error loading session: ${e.message}`, 'error');
+      let cls = level || 'info';
+      const m = String(msg).toLowerCase();
+      const negatives = ['error', 'not legal', 'failed', 'invalid', 'cannot', "can't", 'out of range', 'unknown', 'missing'];
+      if (!level && negatives.some(k => m.includes(k))) cls = 'error';
+
+      const div = document.createElement('div');
+      div.className = 'log-entry' + (cls && cls !== 'info' ? ' ' + cls : '');
+      div.textContent = `[${time}] ${msg}`;
+
+      if (p.firstChild) p.insertBefore(div, p.firstChild); else p.appendChild(div);
+    }
+
+    function updateUI() {
+      document.getElementById('sid').textContent = SID || '-';
+      document.getElementById('turn').textContent = STATE ? STATE.turn : '-';
+      document.getElementById('side').textContent = STATE ? STATE.side_to_move : '-';
+      document.getElementById('current-unit').textContent = STATE?.current_unit_id ?
+        STATE.units[STATE.current_unit_id]?.name || 'unknown' : 'none';
+      document.getElementById('ap').textContent = STATE?.current_unit_id ?
+        STATE.units[STATE.current_unit_id]?.ap_left || 0 : '-';
+      document.getElementById('sel').textContent = SELECTED && STATE?.units[SELECTED] ?
+        STATE.units[SELECTED].name : 'none';
+
+      const endTurnBtn = document.getElementById('end-turn');
+      endTurnBtn.disabled = !SID;
+      renderInitiativeQueue();
+      renderActiveUnitPanel();
+    }
+
+    async function attemptAction(action) {
+      if (!SID) return false;
+      try {
+        // Re-evaluate before performing an action to get latest hints
+        await fetchLegalAndComputeHints();
+        const res = await api(`/sessions/${SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
+        STATE = res.session.mission;
+        log(`Action applied: ${res.explanation}`, 'success');
+        updateUI();
+        await fetchLegalAndComputeHints();
+        render();
+        return true;
+      } catch (e) {
+        // Try to parse server-provided error text for user-friendly message
+        log(`Action failed: ${e.message}`, 'error');
+        // Clear hints on failure to avoid stale UI
+        MOVE_HINTS.clear();
+        ATTACK_HINTS.clear();
+        updateUI();
+        render();
+        return false;
+      }
+    }
+
+    function showGame() {
+      document.getElementById('sessions').style.display = 'none';
+      document.getElementById('create').style.display = 'none';
+      document.getElementById('game').style.display = '';
+    }
+
+    function showSessions() {
+      document.getElementById('game').style.display = 'none';
+      document.getElementById('create').style.display = 'none';
+      document.getElementById('sessions').style.display = '';
+    }
+
+    function showCreate() {
+      document.getElementById('sessions').style.display = 'none';
+      document.getElementById('game').style.display = 'none';
+      document.getElementById('create').style.display = '';
+    }
+
+    async function refreshSessions() {
+      const container = document.getElementById('sessions-list');
+      container.innerHTML = '';
+      try {
+        const sessions = await api('/sessions');
+        if (!Array.isArray(sessions) || sessions.length === 0) {
+          const empty = document.createElement('div');
+          empty.textContent = 'No sessions yet.';
+          empty.style.color = '#666';
+          container.appendChild(empty);
+          return;
         }
+        sessions.forEach(s => {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.justifyContent = 'space-between';
+          row.style.gap = '8px';
+          row.style.padding = '6px 8px';
+          row.style.border = '1px solid #eee';
+          row.style.borderRadius = '4px';
+
+          const info = document.createElement('div');
+          const m = s.mission || {};
+          const unitsCount = m.units ? Object.keys(m.units).length : 0;
+          info.textContent = `${s.id} — Turn ${m.turn ?? '-'} | Side ${m.side_to_move ?? '-'} | Units ${unitsCount}`;
+
+          const btn = document.createElement('button');
+          btn.className = 'action-btn';
+          btn.textContent = 'Continue';
+          const doLoad = async () => {
+            try {
+              const sess = await api(`/sessions/${s.id}`);
+              SID = sess.id;
+              STATE = sess.mission;
+              SELECTED = null;
+              LEGAL_ACTIONS = [];
+              await fetchLegalAndComputeHints();
+              log(`Loaded session ${SID}`);
+              updateUI();
+              render();
+              showGame();
+              document.getElementById('game').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (e) {
+              log(`Error loading session: ${e.message}`, 'error');
+            }
+          };
+          btn.onclick = doLoad;
+          // Also allow clicking the row (not just the button) to load
+          row.onclick = (ev) => {
+            if (ev.target === btn) return; // avoid double fire
+            doLoad();
+          };
+
+          row.appendChild(info);
+          row.appendChild(btn);
+          container.appendChild(row);
+        });
+      } catch (e) {
+        log(`Error fetching sessions: ${e.message}`, 'error');
+      }
+    }
+
+    function renderActiveUnitPanel() {
+      const wrap = document.getElementById('active-unit');
+      if (!wrap) return;
+      if (!STATE || !STATE.current_unit_id) {
+        wrap.innerHTML = 'No active unit.';
+        return;
+      }
+      const u = STATE.units[STATE.current_unit_id];
+      if (!u) { wrap.innerHTML = 'No active unit.'; return; }
+      const base = (u.stats && u.stats.base) || {};
+      const get = (k) => base[k] ?? base[String(k)] ?? 0;
+      const stats = {
+        HP: get('HP'), AP: get('AP'), ATK: get('ATK'), DEF: get('DEF'),
+        MOV: get('MOV'), RNG: get('RNG'), CRIT: get('CRIT'), INIT: get('INIT')
       };
-      btn.onclick = doLoad;
-      // Also allow clicking the row (not just the button) to load
-      row.onclick = (ev) => {
-        if (ev.target === btn) return; // avoid double fire
-        doLoad();
+      const items = Array.isArray(u.items) ? u.items : [];
+      const skills = Array.isArray(u.skills) ? u.skills : [];
+      const pos = Array.isArray(u.pos) ? u.pos : (u.pos || [0, 0]);
+      // Escape helper for HTML attributes
+      const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const fmtMod = (m) => {
+        if (!m) return '';
+        const stat = m.stat ?? '';
+        const op = m.operation ?? '';
+        const val = Number(m.value) || 0;
+        const sign = val >= 0 ? '+' : '-';
+        const absv = Math.abs(val);
+        if (op === 'ADDITIVE') return `${sign} ${absv}${stat}`;
+        if (op === 'MULTIPLICATIVE') return `${sign} ${absv}%${stat}`;
+        if (op === 'OVERRIDE') return `= ${absv}${stat}`;
+        return `${sign} ${absv}${stat}`;
       };
+      const itemTitle = (it) => {
+        const name = (it && it.name) || 'Item';
+        const mods = Array.isArray(it?.mods) ? it.mods.map(fmtMod).filter(Boolean) : [];
+        const lines = [name];
+        if (mods.length) { lines.push('Mods:'); mods.forEach(line => lines.push(` • ${line}`)); }
+        return lines.join('\n');
+      };
+      const itemsHtml = items.length ? items.map(it => `<span class="chip" title="${esc(itemTitle(it))}">${esc((it && it.name) || 'Item')}</span>`).join('') : '<span style="color:#777;">None</span>';
+      const skillsHtml = skills.length ? skills.map(s => `<span class="chip" title="${(s && s.name) || 'Skill'}">${(s && s.name) || 'Skill'}</span>`).join('') : '<span style="color:#777;">None</span>';
+      // Build possible attacks for current unit from LEGAL_ACTIONS (with explain summaries)
+      const attackEntries = (LEGAL_ACTIONS || []).filter(e => e?.action?.kind === 'ATTACK' && e.action.attacker_id === u.id);
+      const attacksHtml = attackEntries.length ? attackEntries.map(e => {
+        const tgt = STATE.units[e.action.target_id];
+        const name = tgt ? `${tgt.name} (${tgt.side})` : e.action.target_id;
+        const sum = e.evaluation?.summary || 'Attack';
+        const dmg = e.evaluation ? ` · ${Math.round(e.evaluation.hit?.result ?? 100)}% · ${e.evaluation.min_damage.toFixed(0)}–${e.evaluation.max_damage.toFixed(0)} avg ${e.evaluation.expected_damage.toFixed(1)}` : '';
+        return `<button class="action-btn" data-act="attack" data-att="${e.action.attacker_id}" data-tgt="${e.action.target_id}" title="${sum}">Attack ${name}${dmg}</button>`;
+      }).join('') : '<span style="color:#777;">None</span>';
 
-      row.appendChild(info);
-      row.appendChild(btn);
-      container.appendChild(row);
-    });
-  } catch (e) {
-    log(`Error fetching sessions: ${e.message}`, 'error');
-  }
-}
-
-function renderActiveUnitPanel() {
-  const wrap = document.getElementById('active-unit');
-  if (!wrap) return;
-  if (!STATE || !STATE.current_unit_id) {
-    wrap.innerHTML = 'No active unit.';
-    return;
-  }
-  const u = STATE.units[STATE.current_unit_id];
-  if (!u) { wrap.innerHTML = 'No active unit.'; return; }
-  const base = (u.stats && u.stats.base) || {};
-  const get = (k) => base[k] ?? base[String(k)] ?? 0;
-  const stats = {
-    HP: get('HP'), AP: get('AP'), ATK: get('ATK'), DEF: get('DEF'),
-    MOV: get('MOV'), RNG: get('RNG'), CRIT: get('CRIT'), INIT: get('INIT')
-  };
-  const items = Array.isArray(u.items) ? u.items : [];
-  const skills = Array.isArray(u.skills) ? u.skills : [];
-  const pos = Array.isArray(u.pos) ? u.pos : (u.pos || [0,0]);
-  // Escape helper for HTML attributes
-  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const fmtMod = (m) => {
-    if (!m) return '';
-    const stat = m.stat ?? '';
-    const op = m.operation ?? '';
-    const val = Number(m.value) || 0;
-    const sign = val >= 0 ? '+' : '-';
-    const absv = Math.abs(val);
-    if (op === 'ADDITIVE') return `${sign} ${absv}${stat}`;
-    if (op === 'MULTIPLICATIVE') return `${sign} ${absv}%${stat}`;
-    if (op === 'OVERRIDE') return `= ${absv}${stat}`;
-    return `${sign} ${absv}${stat}`;
-  };
-  const itemTitle = (it) => {
-    const name = (it && it.name) || 'Item';
-    const mods = Array.isArray(it?.mods) ? it.mods.map(fmtMod).filter(Boolean) : [];
-    const lines = [name];
-    if (mods.length) { lines.push('Mods:'); mods.forEach(line => lines.push(` • ${line}`)); }
-    return lines.join('\n');
-  };
-  const itemsHtml = items.length ? items.map(it => `<span class="chip" title="${esc(itemTitle(it))}">${esc((it && it.name) || 'Item')}</span>`).join('') : '<span style="color:#777;">None</span>';
-  const skillsHtml = skills.length ? skills.map(s => `<span class="chip" title="${(s && s.name) || 'Skill'}">${(s && s.name) || 'Skill'}</span>`).join('') : '<span style="color:#777;">None</span>';
-  // Build possible attacks for current unit from LEGAL_ACTIONS (with explain summaries)
-  const attackEntries = (LEGAL_ACTIONS || []).filter(e => e?.action?.kind === 'ATTACK' && e.action.attacker_id === u.id);
-  const attacksHtml = attackEntries.length ? attackEntries.map(e => {
-    const tgt = STATE.units[e.action.target_id];
-    const name = tgt ? `${tgt.name} (${tgt.side})` : e.action.target_id;
-    const sum = e.evaluation?.summary || 'Attack';
-    const dmg = e.evaluation ? ` · ${Math.round(e.evaluation.hit?.result ?? 100)}% · ${e.evaluation.min_damage.toFixed(0)}–${e.evaluation.max_damage.toFixed(0)} avg ${e.evaluation.expected_damage.toFixed(1)}` : '';
-    return `<button class="action-btn" data-act="attack" data-att="${e.action.attacker_id}" data-tgt="${e.action.target_id}" title="${sum}">Attack ${name}${dmg}</button>`;
-  }).join('') : '<span style="color:#777;">None</span>';
-
-  wrap.innerHTML = `
+      wrap.innerHTML = `
     <h3>${u.name} <span style="font-weight:400; color:#666;">(${u.side})</span></h3>
     <div class="meta">Pos: ${pos[0]},${pos[1]} · AP: ${u.ap_left ?? 0}</div>
     <div class="stats-grid">
@@ -354,396 +596,397 @@ function renderActiveUnitPanel() {
     <div id="attack-options">${attacksHtml}</div>
   `;
 
-  // Wire attack buttons
-  document.querySelectorAll('#attack-options button[data-act="attack"]').forEach(btn => {
-    btn.onclick = async () => {
-      const attacker = btn.getAttribute('data-att');
-      const target = btn.getAttribute('data-tgt');
-      if (!attacker || !target) return;
-      await attemptAction({ kind:'ATTACK', attacker_id: attacker, target_id: target });
-    };
-  });
-}
-
-document.getElementById('new').onclick = async () => {
-  try {
-    log('Creating new session...');
-    const res = await api('/sessions', {method:'POST', body: JSON.stringify({})});
-    SID = res.id;
-    STATE = res.mission;
-    LEGAL_ACTIONS = [];
-    log(`Session ${SID} created`);
-    updateUI();
-  await fetchLegalAndComputeHints();
-    render();
-  showGame();
-  refreshSessions();
-  } catch (e) {
-    log(`Error: ${e.message}`, 'error');
-  }
-};
-
-document.getElementById('create-session').onclick = async () => {
-  try {
-    // Load example from /info
-    const info = await api('/info');
-    let example = (info.requests && info.requests.create_session && info.requests.create_session.example)
-      ? info.requests.create_session.example
-      : { mission: info?.models?.mission?.example };
-    if (!example || !example.mission) {
-      example = { mission: {} };
-      log('Could not find example mission in /info; starting with empty object', 'warn');
+      // Wire attack buttons
+      document.querySelectorAll('#attack-options button[data-act="attack"]').forEach(btn => {
+        btn.onclick = async () => {
+          const attacker = btn.getAttribute('data-att');
+          const target = btn.getAttribute('data-tgt');
+          if (!attacker || !target) return;
+          await attemptAction({ kind: 'ATTACK', attacker_id: attacker, target_id: target });
+        };
+      });
     }
-    const ta = document.getElementById('create-json');
-    const editorEl = document.getElementById('create-editor');
-    const controls = document.getElementById('editor-controls');
-  ta.value = JSON.stringify(example, null, 2);
-    document.getElementById('create-status').style.display = 'none';
-    // Initialize JSONEditor if available
-    if (window.JSONEditor) {
-      if (!CREATE_EDITOR) {
-        CREATE_EDITOR = new JSONEditor(editorEl, { mode: 'tree', mainMenuBar: false });
+
+    document.getElementById('new').onclick = async () => {
+      try {
+        log('Creating new session...');
+        const res = await api('/sessions', { method: 'POST', body: JSON.stringify({}) });
+        SID = res.id;
+        STATE = res.mission;
+        LEGAL_ACTIONS = [];
+        log(`Session ${SID} created`);
+        updateUI();
+        await fetchLegalAndComputeHints();
+        render();
+        showGame();
+        refreshSessions();
+      } catch (e) {
+        log(`Error: ${e.message}`, 'error');
       }
-      CREATE_EDITOR.set(example);
-      editorEl.style.display = '';
-      controls.style.display = '';
-      document.getElementById('mode-tree').checked = true;
-      document.getElementById('mode-text').checked = false;
-      ta.style.display = 'none';
-    } else {
-      // Fallback to plaintext textarea
-      editorEl.style.display = 'none';
-      controls.style.display = 'none';
-      ta.style.display = '';
-    }
-    showCreate();
-    document.getElementById('create').scrollIntoView({behavior:'smooth', block:'start'});
-  } catch (e) {
-    log(`Error preparing create session: ${e.message}`, 'error');
-  }
-};
+    };
 
-document.getElementById('cancel-create').onclick = () => {
-  showSessions();
-};
+    document.getElementById('create-session').onclick = async () => {
+      try {
+        // Load example from /info
+        const info = await api('/info');
+        let example = (info.requests && info.requests.create_session && info.requests.create_session.example)
+          ? info.requests.create_session.example
+          : { mission: info?.models?.mission?.example };
+        if (!example || !example.mission) {
+          example = { mission: {} };
+          log('Could not find example mission in /info; starting with empty object', 'warn');
+        }
+        const ta = document.getElementById('create-json');
+        const editorEl = document.getElementById('create-editor');
+        const controls = document.getElementById('editor-controls');
+        ta.value = JSON.stringify(example, null, 2);
+        document.getElementById('create-status').style.display = 'none';
+        // Initialize JSONEditor if available
+        if (window.JSONEditor) {
+          if (!CREATE_EDITOR) {
+            CREATE_EDITOR = new JSONEditor(editorEl, { mode: 'tree', mainMenuBar: false });
+          }
+          CREATE_EDITOR.set(example);
+          editorEl.style.display = '';
+          controls.style.display = '';
+          document.getElementById('mode-tree').checked = true;
+          document.getElementById('mode-text').checked = false;
+          ta.style.display = 'none';
+        } else {
+          // Fallback to plaintext textarea
+          editorEl.style.display = 'none';
+          controls.style.display = 'none';
+          ta.style.display = '';
+        }
+        showCreate();
+        document.getElementById('create').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (e) {
+        log(`Error preparing create session: ${e.message}`, 'error');
+      }
+    };
 
-document.getElementById('submit-session').onclick = async () => {
-  const status = document.getElementById('create-status');
-  status.style.display = '';
-  status.textContent = 'Submitting...';
-  try {
-    let body;
-    if (CREATE_EDITOR) {
-      try { body = CREATE_EDITOR.get(); }
-      catch (e) { status.textContent = 'Invalid JSON in editor: ' + e.message; status.classList.add('error'); return; }
-    } else {
-      const raw = document.getElementById('create-json').value;
-      try { body = JSON.parse(raw); }
-      catch (e) { status.textContent = 'Invalid JSON: ' + e.message; status.classList.add('error'); return; }
-    }
-    if (!body || typeof body !== 'object') {
-      status.textContent = 'Body must be a JSON object.';
-      status.classList.add('error');
-      return;
-    }
-    if (!('mission' in body)) {
-      status.textContent = 'Body should contain a "mission" field.';
-      status.classList.add('error');
-      return;
-    }
-    const res = await api('/sessions', { method:'POST', body: JSON.stringify(body) });
-    SID = res.id;
-    STATE = res.mission;
-    SELECTED = null;
-    LEGAL_ACTIONS = [];
-    log(`Custom session ${SID} created`);
-    updateUI();
-    await fetchLegalAndComputeHints();
-    render();
-    showGame();
-    refreshSessions();
-    status.textContent = 'Created successfully!';
-    status.classList.remove('error');
-  } catch (e) {
-    status.textContent = 'Error: ' + e.message;
-    status.classList.add('error');
-    log(`Error creating session: ${e.message}`, 'error');
-  }
-};
+    document.getElementById('cancel-create').onclick = () => {
+      showSessions();
+    };
 
-// Editor mode and expand/collapse controls
-(() => {
-  const controls = document.getElementById('editor-controls');
-  if (!controls) return;
-  const modeTree = document.getElementById('mode-tree');
-  const modeText = document.getElementById('mode-text');
-  const editorEl = document.getElementById('create-editor');
-  const ta = document.getElementById('create-json');
-  const toTree = () => {
-    if (!window.JSONEditor) return;
-    try {
-      const obj = JSON.parse(ta.value || '{}');
-      if (!CREATE_EDITOR) CREATE_EDITOR = new JSONEditor(editorEl, { mode: 'tree', mainMenuBar: false });
-      CREATE_EDITOR.set(obj);
-      ta.style.display = 'none';
-      editorEl.style.display = '';
-    } catch (e) { log('Cannot switch to Tree: ' + e.message, 'error'); }
-  };
-  const toText = () => {
-    try {
-      const obj = CREATE_EDITOR ? CREATE_EDITOR.get() : {};
-      ta.value = JSON.stringify(obj, null, 2);
-      editorEl.style.display = 'none';
-      ta.style.display = '';
-    } catch (e) { log('Cannot switch to Text: ' + e.message, 'error'); }
-  };
-  if (modeTree) modeTree.addEventListener('change', () => { if (modeTree.checked) toTree(); });
-  if (modeText) modeText.addEventListener('change', () => { if (modeText.checked) toText(); });
-  const expandBtn = document.getElementById('expand-all');
-  const collapseBtn = document.getElementById('collapse-all');
-  if (expandBtn) expandBtn.onclick = () => { if (CREATE_EDITOR) CREATE_EDITOR.expandAll(); };
-  if (collapseBtn) collapseBtn.onclick = () => { if (CREATE_EDITOR) CREATE_EDITOR.collapseAll(); };
-})();
+    document.getElementById('submit-session').onclick = async () => {
+      const status = document.getElementById('create-status');
+      status.style.display = '';
+      status.textContent = 'Submitting...';
+      try {
+        let body;
+        if (CREATE_EDITOR) {
+          try { body = CREATE_EDITOR.get(); }
+          catch (e) { status.textContent = 'Invalid JSON in editor: ' + e.message; status.classList.add('error'); return; }
+        } else {
+          const raw = document.getElementById('create-json').value;
+          try { body = JSON.parse(raw); }
+          catch (e) { status.textContent = 'Invalid JSON: ' + e.message; status.classList.add('error'); return; }
+        }
+        if (!body || typeof body !== 'object') {
+          status.textContent = 'Body must be a JSON object.';
+          status.classList.add('error');
+          return;
+        }
+        if (!('mission' in body)) {
+          status.textContent = 'Body should contain a "mission" field.';
+          status.classList.add('error');
+          return;
+        }
+        const res = await api('/sessions', { method: 'POST', body: JSON.stringify(body) });
+        SID = res.id;
+        STATE = res.mission;
+        SELECTED = null;
+        LEGAL_ACTIONS = [];
+        log(`Custom session ${SID} created`);
+        updateUI();
+        await fetchLegalAndComputeHints();
+        render();
+        showGame();
+        refreshSessions();
+        status.textContent = 'Created successfully!';
+        status.classList.remove('error');
+      } catch (e) {
+        status.textContent = 'Error: ' + e.message;
+        status.classList.add('error');
+        log(`Error creating session: ${e.message}`, 'error');
+      }
+    };
 
-document.getElementById('end-turn').onclick = async () => {
-  if (!SID) return;
-  try {
-    log('Ending turn...');
-    const action = {kind: 'END_TURN'};
-    const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
-    STATE = res.session.mission;
-    SELECTED = null;
-    LEGAL_ACTIONS = [];
-  log(`Turn ended: ${res.explanation}`, 'success');
-    updateUI();
-  await fetchLegalAndComputeHints();
-    render();
-  } catch (e) {
-    log(`Error: ${e.message}`, 'error');
-  }
-};
+    // Editor mode and expand/collapse controls
+    (() => {
+      const controls = document.getElementById('editor-controls');
+      if (!controls) return;
+      const modeTree = document.getElementById('mode-tree');
+      const modeText = document.getElementById('mode-text');
+      const editorEl = document.getElementById('create-editor');
+      const ta = document.getElementById('create-json');
+      const toTree = () => {
+        if (!window.JSONEditor) return;
+        try {
+          const obj = JSON.parse(ta.value || '{}');
+          if (!CREATE_EDITOR) CREATE_EDITOR = new JSONEditor(editorEl, { mode: 'tree', mainMenuBar: false });
+          CREATE_EDITOR.set(obj);
+          ta.style.display = 'none';
+          editorEl.style.display = '';
+        } catch (e) { log('Cannot switch to Tree: ' + e.message, 'error'); }
+      };
+      const toText = () => {
+        try {
+          const obj = CREATE_EDITOR ? CREATE_EDITOR.get() : {};
+          ta.value = JSON.stringify(obj, null, 2);
+          editorEl.style.display = 'none';
+          ta.style.display = '';
+        } catch (e) { log('Cannot switch to Text: ' + e.message, 'error'); }
+      };
+      if (modeTree) modeTree.addEventListener('change', () => { if (modeTree.checked) toTree(); });
+      if (modeText) modeText.addEventListener('change', () => { if (modeText.checked) toText(); });
+      const expandBtn = document.getElementById('expand-all');
+      const collapseBtn = document.getElementById('collapse-all');
+      if (expandBtn) expandBtn.onclick = () => { if (CREATE_EDITOR) CREATE_EDITOR.expandAll(); };
+      if (collapseBtn) collapseBtn.onclick = () => { if (CREATE_EDITOR) CREATE_EDITOR.collapseAll(); };
+    })();
 
-document.getElementById('legal').onclick = async () => {
-  if (!SID) return;
-  try {
-    if (!SELECTED && STATE?.current_unit_id) SELECTED = STATE.current_unit_id;
-    await fetchLegalAndComputeHints();
-    render();
-    log(`Found ${LEGAL_ACTIONS.length} legal actions`);
-  } catch (e) {
-    log(`Error: ${e.message}`, 'error');
-  }
-};
+    document.getElementById('end-turn').onclick = async () => {
+      if (!SID) return;
+      try {
+        log('Ending turn...');
+        const action = { kind: 'END_TURN' };
+        const res = await api(`/sessions/${SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
+        STATE = res.session.mission;
+        SELECTED = null;
+        LEGAL_ACTIONS = [];
+        log(`Turn ended: ${res.explanation}`, 'success');
+        updateUI();
+        await fetchLegalAndComputeHints();
+        render();
+      } catch (e) {
+        log(`Error: ${e.message}`, 'error');
+      }
+    };
 
-function render() {
-  const g = document.getElementById('grid');
-  if (!STATE) return;
+    document.getElementById('legal').onclick = async () => {
+      if (!SID) return;
+      try {
+        if (!SELECTED && STATE?.current_unit_id) SELECTED = STATE.current_unit_id;
+        await fetchLegalAndComputeHints();
+        render();
+        log(`Found ${LEGAL_ACTIONS.length} legal actions`);
+      } catch (e) {
+        log(`Error: ${e.message}`, 'error');
+      }
+    };
 
-  const w = STATE.map.width, h = STATE.map.height;
-  g.style.gridTemplateColumns = `repeat(${w}, 32px)`;
-  g.innerHTML = '';
+    function render() {
+      const g = document.getElementById('grid');
+      if (!STATE) return;
 
-  const idx = {};
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const t = STATE.map.tiles[y][x];
-      const div = document.createElement('div');
-      div.className = 'tile ' + (t.terrain || 'PLAIN');
-      div.dataset.x = x;
-      div.dataset.y = y;
-      g.appendChild(div);
-      idx[`${x},${y}`] = div;
-    }
-  }
+      const w = STATE.map.width, h = STATE.map.height;
+      g.style.gridTemplateColumns = `repeat(${w}, 32px)`;
+      g.innerHTML = '';
 
-  // Render units
-  Object.values(STATE.units).forEach(u => {
-    const d = idx[`${u.pos[0]},${u.pos[1]}`];
-    if (!d) return;
+      const idx = {};
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const t = STATE.map.tiles[y][x];
+          const div = document.createElement('div');
+          div.className = 'tile ' + (t.terrain || 'PLAIN');
+          div.dataset.x = x;
+          div.dataset.y = y;
+          g.appendChild(div);
+          idx[`${x},${y}`] = div;
+        }
+      }
 
-    const dot = document.createElement('div');
-    dot.className = 'u ' + u.side + (u.alive ? '' : ' dead');
-  const base = (u.stats && u.stats.base) || {};
-  const hp = (base.HP ?? base['HP'] ?? 0);
-    const ap = (u.ap_left ?? 0);
-    dot.innerHTML = `<div style="line-height:1.05; text-align:center;">
+      // Render units
+      Object.values(STATE.units).forEach(u => {
+        const d = idx[`${u.pos[0]},${u.pos[1]}`];
+        if (!d) return;
+
+        const dot = document.createElement('div');
+        dot.className = 'u ' + u.side + (u.alive ? '' : ' dead');
+        const base = (u.stats && u.stats.base) || {};
+        const hp = (base.HP ?? base['HP'] ?? 0);
+        const ap = (u.ap_left ?? 0);
+        dot.innerHTML = `<div style="line-height:1.05; text-align:center;">
       <div>hp: ${hp}</div>
       <div>ap: ${ap}</div>
     </div>`;
-    const allStats = [
-      ['HP', hp],
-      ['AP', (base.AP ?? base['AP'] ?? ap)],
-      ['ATK', (base.ATK ?? base['ATK'] ?? 0)],
-      ['DEF', (base.DEF ?? base['DEF'] ?? 0)],
-      ['MOV', (base.MOV ?? base['MOV'] ?? 0)],
-      ['RNG', (base.RNG ?? base['RNG'] ?? 0)],
-  ['CRIT', (base.CRIT ?? base['CRIT'] ?? 0)],
-  ['INIT', (base.INIT ?? base['INIT'] ?? 0)],
-    ].map(([k,v]) => `${k}: ${v}`).join('\n');
-    dot.title = `${u.name} (${u.side})\nPos: ${u.pos[0]},${u.pos[1]}\n${allStats}`;
+        const allStats = [
+          ['HP', hp],
+          ['AP', (base.AP ?? base['AP'] ?? ap)],
+          ['ATK', (base.ATK ?? base['ATK'] ?? 0)],
+          ['DEF', (base.DEF ?? base['DEF'] ?? 0)],
+          ['MOV', (base.MOV ?? base['MOV'] ?? 0)],
+          ['RNG', (base.RNG ?? base['RNG'] ?? 0)],
+          ['CRIT', (base.CRIT ?? base['CRIT'] ?? 0)],
+          ['INIT', (base.INIT ?? base['INIT'] ?? 0)],
+        ].map(([k, v]) => `${k}: ${v}`).join('\n');
+        dot.title = `${u.name} (${u.side})\nPos: ${u.pos[0]},${u.pos[1]}\n${allStats}`;
 
-    // Click behavior:
-    // - If a friendly unit is selected and this is an enemy, try attack (don't change selection).
-    // - If this is an enemy and no selection, do nothing.
-    // - Otherwise, select this (friendly) unit.
-    dot.onclick = async (e) => {
-      e.stopPropagation();
-      if (!u.alive) return;
+        // Click behavior:
+        // - If a friendly unit is selected and this is an enemy, try attack (don't change selection).
+        // - If this is an enemy and no selection, do nothing.
+        // - Otherwise, select this (friendly) unit.
+        dot.onclick = async (e) => {
+          e.stopPropagation();
+          if (!u.alive) return;
 
-  const selectedUnit = SELECTED ? STATE.units[SELECTED] : null;
-  const isCurrent = STATE.current_unit_id === u.id;
+          const selectedUnit = SELECTED ? STATE.units[SELECTED] : null;
+          const isCurrent = STATE.current_unit_id === u.id;
 
-      // If a unit is already selected and this clicked unit is on the opposite side, try to attack instead of selecting
-      if (selectedUnit && selectedUnit.alive && selectedUnit.id !== u.id && selectedUnit.side !== u.side) {
-        if (selectedUnit.id !== STATE.current_unit_id) {
-          log(`${selectedUnit.name} is not the active unit. It's ${STATE.units[STATE.current_unit_id]?.name}'s turn.`);
-          return;
+          // If a unit is already selected and this clicked unit is on the opposite side, try to attack instead of selecting
+          if (selectedUnit && selectedUnit.alive && selectedUnit.id !== u.id && selectedUnit.side !== u.side) {
+            if (selectedUnit.id !== STATE.current_unit_id) {
+              log(`${selectedUnit.name} is not the active unit. It's ${STATE.units[STATE.current_unit_id]?.name}'s turn.`);
+              return;
+            }
+            const action = { kind: 'ATTACK', attacker_id: selectedUnit.id, target_id: u.id };
+            const ok = await attemptAction(action);
+            if (ok) return; // Keep selection on the attacker
+            return; // If illegal, stop without selecting the target
+          }
+
+          // Only allow selecting the current unit
+          if (!isCurrent) {
+            log(`${u.name} is not the active unit. It's ${STATE.units[STATE.current_unit_id]?.name}'s turn.`);
+            return;
+          }
+
+          // Select current unit
+          SELECTED = u.id;
+          updateUI();
+          // Remove previous tile selection and apply to this tile so the full square is highlighted
+          document.querySelectorAll('.tile.selected').forEach(el => el.classList.remove('selected'));
+          d.classList.add('selected');
+          log(`Selected ${u.name}`);
+          // After selecting, compute hints from server legal actions
+          await fetchLegalAndComputeHints();
+          render();
+        };
+
+        d.appendChild(dot);
+      });
+
+      // Highlight current unit
+      if (STATE.current_unit_id) {
+        const currentUnit = STATE.units[STATE.current_unit_id];
+        if (currentUnit) {
+          const currentTile = idx[`${currentUnit.pos[0]},${currentUnit.pos[1]}`];
+          if (currentTile) {
+            currentTile.classList.add('current');
+          }
         }
-        const action = { kind: 'ATTACK', attacker_id: selectedUnit.id, target_id: u.id };
-        const ok = await attemptAction(action);
-        if (ok) return; // Keep selection on the attacker
-        return; // If illegal, stop without selecting the target
       }
 
-      // Only allow selecting the current unit
-      if (!isCurrent) {
-        log(`${u.name} is not the active unit. It's ${STATE.units[STATE.current_unit_id]?.name}'s turn.`);
+      // Persist selection highlight across renders
+      if (SELECTED && STATE.units[SELECTED]) {
+        const su = STATE.units[SELECTED];
+        const selTile = idx[`${su.pos[0]},${su.pos[1]}`];
+        if (selTile) selTile.classList.add('selected');
+      }
+
+      // Render move/attack hints
+      MOVE_HINTS.forEach(key => {
+        const el = idx[key];
+        if (el) el.classList.add('move');
+      });
+      ATTACK_HINTS.forEach((uid, key) => {
+        const el = idx[key];
+        if (el) {
+          const ring = document.createElement('div');
+          ring.className = 'ring';
+          el.appendChild(ring);
+        }
+      });
+
+      // Handle tile clicks for movement/attacks
+      g.querySelectorAll('.tile').forEach(tile => {
+        tile.onclick = async () => {
+          if (!SID || !SELECTED) return;
+
+          const to = [parseInt(tile.dataset.x), parseInt(tile.dataset.y)];
+          const selectedUnit = STATE.units[SELECTED];
+          const isCurrentSel = STATE.current_unit_id === selectedUnit.id;
+
+          // Check if there's a unit at the target position
+          const targetUnit = Object.values(STATE.units).find(u =>
+            u.alive && u.pos[0] === to[0] && u.pos[1] === to[1]
+          );
+
+          if (!isCurrentSel) {
+            log(`${selectedUnit.name} is not the active unit. It's ${STATE.units[STATE.current_unit_id]?.name}'s turn.`);
+            return;
+          }
+          let action;
+          if (targetUnit && targetUnit.side !== selectedUnit.side) {
+            action = { kind: 'ATTACK', attacker_id: SELECTED, target_id: targetUnit.id };
+            log(`Attempting to attack ${targetUnit.name}...`);
+          } else {
+            action = { kind: 'MOVE', unit_id: SELECTED, to: to };
+            log(`Attempting to move to ${to[0]},${to[1]}...`);
+          }
+          await attemptAction(action);
+          // Refresh hints after the action
+          await fetchLegalAndComputeHints();
+          render();
+        };
+      });
+    }
+
+    async function fetchLegalAndComputeHints() {
+      MOVE_HINTS.clear();
+      ATTACK_HINTS.clear();
+      if (!SID || !SELECTED) return;
+      // Only compute hints for the active unit via server legal actions
+      if (STATE.current_unit_id !== SELECTED) return;
+      try {
+        const res = await api(`/sessions/${SID}/legal_actions?explain=true`);
+        LEGAL_ACTIONS = res.actions || [];
+      } catch (e) {
+        log(`Error fetching legal actions: ${e.message}`, 'error');
         return;
       }
-
-  // Select current unit
-      SELECTED = u.id;
-      updateUI();
-      // Remove previous tile selection and apply to this tile so the full square is highlighted
-      document.querySelectorAll('.tile.selected').forEach(el => el.classList.remove('selected'));
-      d.classList.add('selected');
-      log(`Selected ${u.name}`);
-  // After selecting, compute hints from server legal actions
-  await fetchLegalAndComputeHints();
-  render();
-    };
-
-    d.appendChild(dot);
-  });
-
-  // Highlight current unit
-  if (STATE.current_unit_id) {
-    const currentUnit = STATE.units[STATE.current_unit_id];
-    if (currentUnit) {
-      const currentTile = idx[`${currentUnit.pos[0]},${currentUnit.pos[1]}`];
-      if (currentTile) {
-        currentTile.classList.add('current');
+      for (const entry of LEGAL_ACTIONS) {
+        const a = entry.action || entry; // backend returns {action, explanation}
+        if (a.kind === 'MOVE' && a.unit_id === SELECTED && Array.isArray(a.to)) {
+          MOVE_HINTS.add(`${a.to[0]},${a.to[1]}`);
+        }
+        if (a.kind === 'ATTACK' && a.attacker_id === SELECTED) {
+          const tgt = STATE.units[a.target_id];
+          // Only highlight enemy targets for attack rings
+          if (tgt && tgt.alive && tgt.side !== STATE.units[SELECTED].side) {
+            ATTACK_HINTS.set(`${tgt.pos[0]},${tgt.pos[1]}`, tgt.id);
+          }
+        }
       }
     }
-  }
 
-  // Persist selection highlight across renders
-  if (SELECTED && STATE.units[SELECTED]) {
-    const su = STATE.units[SELECTED];
-    const selTile = idx[`${su.pos[0]},${su.pos[1]}`];
-    if (selTile) selTile.classList.add('selected');
-  }
-
-  // Render move/attack hints
-  MOVE_HINTS.forEach(key => {
-    const el = idx[key];
-    if (el) el.classList.add('move');
-  });
-  ATTACK_HINTS.forEach((uid, key) => {
-    const el = idx[key];
-    if (el) {
-      const ring = document.createElement('div');
-      ring.className = 'ring';
-      el.appendChild(ring);
+    function renderInitiativeQueue() {
+      const wrap = document.getElementById('init-queue');
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      const order = (STATE && Array.isArray(STATE.initiative_order)) ? STATE.initiative_order : [];
+      if (!order.length) return;
+      order.forEach(uid => {
+        const u = STATE.units[uid];
+        if (!u) return;
+        const div = document.createElement('div');
+        div.className = 'queue-item' + (uid === STATE.current_unit_id ? ' current' : '') + (!u.alive ? ' dead' : '');
+        const base = (u.stats && u.stats.base) || {};
+        const init = base.INIT ?? base['INIT'] ?? 0;
+        div.textContent = `${u.name} (${u.side}) · INIT ${init}`;
+        div.title = `Unit: ${u.name} (${u.side})\nINIT: ${init}`;
+        wrap.appendChild(div);
+      });
     }
-  });
 
-  // Handle tile clicks for movement/attacks
-  g.querySelectorAll('.tile').forEach(tile => {
-    tile.onclick = async () => {
-  if (!SID || !SELECTED) return;
-
-      const to = [parseInt(tile.dataset.x), parseInt(tile.dataset.y)];
-      const selectedUnit = STATE.units[SELECTED];
-  const isCurrentSel = STATE.current_unit_id === selectedUnit.id;
-
-      // Check if there's a unit at the target position
-      const targetUnit = Object.values(STATE.units).find(u =>
-        u.alive && u.pos[0] === to[0] && u.pos[1] === to[1]
-      );
-
-      if (!isCurrentSel) {
-        log(`${selectedUnit.name} is not the active unit. It's ${STATE.units[STATE.current_unit_id]?.name}'s turn.`);
-        return;
-      }
-      let action;
-      if (targetUnit && targetUnit.side !== selectedUnit.side) {
-        action = {kind: 'ATTACK', attacker_id: SELECTED, target_id: targetUnit.id};
-        log(`Attempting to attack ${targetUnit.name}...`);
-      } else {
-        action = {kind: 'MOVE', unit_id: SELECTED, to: to};
-        log(`Attempting to move to ${to[0]},${to[1]}...`);
-      }
-      await attemptAction(action);
-      // Refresh hints after the action
-      await fetchLegalAndComputeHints();
-      render();
-    };
-  });
-}
-
-async function fetchLegalAndComputeHints() {
-  MOVE_HINTS.clear();
-  ATTACK_HINTS.clear();
-  if (!SID || !SELECTED) return;
-  // Only compute hints for the active unit via server legal actions
-  if (STATE.current_unit_id !== SELECTED) return;
-  try {
-    const res = await api(`/sessions/${SID}/legal_actions?explain=true`);
-    LEGAL_ACTIONS = res.actions || [];
-  } catch (e) {
-    log(`Error fetching legal actions: ${e.message}`, 'error');
-    return;
-  }
-  for (const entry of LEGAL_ACTIONS) {
-    const a = entry.action || entry; // backend returns {action, explanation}
-    if (a.kind === 'MOVE' && a.unit_id === SELECTED && Array.isArray(a.to)) {
-      MOVE_HINTS.add(`${a.to[0]},${a.to[1]}`);
-    }
-    if (a.kind === 'ATTACK' && a.attacker_id === SELECTED) {
-      const tgt = STATE.units[a.target_id];
-      // Only highlight enemy targets for attack rings
-      if (tgt && tgt.alive && tgt.side !== STATE.units[SELECTED].side) {
-        ATTACK_HINTS.set(`${tgt.pos[0]},${tgt.pos[1]}`, tgt.id);
-      }
-    }
-  }
-}
-
-function renderInitiativeQueue() {
-  const wrap = document.getElementById('init-queue');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-  const order = (STATE && Array.isArray(STATE.initiative_order)) ? STATE.initiative_order : [];
-  if (!order.length) return;
-  order.forEach(uid => {
-    const u = STATE.units[uid];
-    if (!u) return;
-    const div = document.createElement('div');
-    div.className = 'queue-item' + (uid === STATE.current_unit_id ? ' current' : '') + (!u.alive ? ' dead' : '');
-    const base = (u.stats && u.stats.base) || {};
-    const init = base.INIT ?? base['INIT'] ?? 0;
-    div.textContent = `${u.name} (${u.side}) · INIT ${init}`;
-    div.title = `Unit: ${u.name} (${u.side})\nINIT: ${init}`;
-    wrap.appendChild(div);
-  });
-}
-
-// Initialize
-updateUI();
-document.getElementById('refresh-sessions').onclick = refreshSessions;
-document.getElementById('show-sessions').onclick = () => { showSessions(); refreshSessions(); document.getElementById('sessions').scrollIntoView({behavior:'smooth', block:'start'}); };
-refreshSessions();
-</script>
+    // Initialize
+    updateUI();
+    document.getElementById('refresh-sessions').onclick = refreshSessions;
+    document.getElementById('show-sessions').onclick = () => { showSessions(); refreshSessions(); document.getElementById('sessions').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    refreshSessions();
+  </script>
 </body>
+
 </html>
