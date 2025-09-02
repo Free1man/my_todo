@@ -16,18 +16,7 @@ from .models.api import (
 from .models.tbs import TBSSession, default_demo_mission
 from .models.common import Unit, Item, Mission, StatName
 from .engine.tbs_engine import TBSEngine
-from .storage import Storage, InMemoryStorage
-from .storage_redis import RedisStorage
-
-# Storage: prefer Redis if REDIS_URL is set
-_redis_url = os.getenv("REDIS_URL")
-if _redis_url:
-    import redis
-    from .storage_redis import RedisStorage
-    _client = redis.from_url(_redis_url, decode_responses=False)
-    storage: Storage[TBSSession] = RedisStorage(client=_client, model_cls=TBSSession, key_prefix="tbs:sess")
-else:
-    storage = InMemoryStorage()
+from . import storage
 
 app = FastAPI(title="Abstract Tactics - TBS Only")
 engine = TBSEngine()
@@ -47,17 +36,13 @@ def index():
 @app.get("/health")
 def health() -> Dict[str, Any]:
     ok = True
-    if isinstance(storage, RedisStorage):
-        try:
-            storage.client.ping()
-            redis_connected = True
-        except Exception:
-            redis_connected = False
-            ok = False
-        health_data = {"ok": ok, "storage": "redis", "redis_connected": redis_connected}
-    else:
-        health_data = {"ok": ok, "storage": "memory"}
-    return health_data
+    try:
+        storage.r.ping()
+        redis_connected = True
+    except Exception:
+        redis_connected = False
+        ok = False
+    return {"ok": ok, "storage": "redis", "redis_connected": redis_connected}
 
 ## Model-driven examples (avoid bespoke templates)
 

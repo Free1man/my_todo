@@ -22,6 +22,8 @@ services:
       - .env
     environment:
       REDIS_URL: redis://redis:6379/0
+      MAX_SESSIONS: 50
+      EVICT_ON_GET: true
     depends_on:
       - redis
     # Dev bind mount (uncommented); use ':cached' only on Docker Desktop/macOS
