@@ -13,25 +13,30 @@ class TBSSession(BaseModel):
 
 def default_demo_mission() -> Mission:
     width, height = 8, 8
-    # Map terrain: a horizontal river at y==3 with a 2-tile bridge at x==3..4
-    tiles = [
-        [
-            (
-                Terrain.WATER
-                if (y == 3 and x not in (3, 4))  # river except the bridge tiles
-                else Terrain.PLAIN
-            )
-            for x in range(width)
-        ]
-        for y in range(height)
-    ]
+    # Start with plains
+    terrain = [[Terrain.PLAIN for _ in range(width)] for _ in range(height)]
+    # Horizontal river at y == 3 with a 2-tile bridge at x == 3..4
+    for x in range(width):
+        if x not in (3, 4):
+            terrain[3][x] = Terrain.WATER
+    # Add some forests (defensive cover) and hills (high ground)
+    forests = {(1, 0), (2, 0), (1, 1), (6, 2), (0, 5), (1, 5)}
+    hills = {(6, 1), (2, 5), (5, 6)}
+    blocked = {(0, 7)}  # a small rock outcrop that's impassable
+    for (x, y) in forests:
+        terrain[y][x] = Terrain.FOREST
+    for (x, y) in hills:
+        terrain[y][x] = Terrain.HILL
+    for (x, y) in blocked:
+        terrain[y][x] = Terrain.BLOCKED
+
     grid = MapGrid(
         width=width,
         height=height,
-        tiles=[[ 
-            # no tile mods in demo
-            Tile(terrain=t, mods=[]) for t in row
-        ] for row in tiles]
+        tiles=[[
+            Tile(terrain=terrain[y][x], mods=[])
+            for x in range(width)
+        ] for y in range(height)]
     )
 
     iron_sword = Item(
@@ -55,11 +60,32 @@ def default_demo_mission() -> Mission:
         cooldown=2
     )
 
+    # Additional unique items to diversify units
+    short_bow = Item(
+        id="item.bow.short", name="Short Bow",
+        mods=[
+            StatModifier(stat=StatName.ATK, operation=Operation.ADDITIVE, value=1, source=ModifierSource.ITEM),
+            StatModifier(stat=StatName.RNG, operation=Operation.ADDITIVE, value=1, source=ModifierSource.ITEM),
+        ]
+    )
+    light_boots = Item(
+        id="item.boots.light", name="Light Boots",
+        mods=[StatModifier(stat=StatName.MOV, operation=Operation.ADDITIVE, value=1, source=ModifierSource.ITEM)]
+    )
+    spiked_club = Item(
+        id="item.club.spiked", name="Spiked Club",
+        mods=[StatModifier(stat=StatName.ATK, operation=Operation.ADDITIVE, value=2, source=ModifierSource.ITEM)]
+    )
+    hide_shield = Item(
+        id="item.shield.hide", name="Hide Shield",
+        mods=[StatModifier(stat=StatName.DEF, operation=Operation.ADDITIVE, value=1, source=ModifierSource.ITEM)]
+    )
+
     u1 = Unit(
         id="u.player.1", side=Side.PLAYER, name="Hero", pos=(1, 1),
         stats=StatBlock(base={
             StatName.HP: 10, StatName.AP: 2, StatName.ATK: 3, StatName.DEF: 2,
-            StatName.MOV: 4, StatName.RNG: 1, StatName.CRIT: 5
+            StatName.MOV: 4, StatName.RNG: 1, StatName.CRIT: 5, StatName.INIT: 12
         }),
         items=[iron_sword, leather_armor],
         injuries=[],
@@ -72,9 +98,35 @@ def default_demo_mission() -> Mission:
         id="u.enemy.1", side=Side.ENEMY, name="Goblin", pos=(6, 6),
         stats=StatBlock(base={
             StatName.HP: 8, StatName.AP: 2, StatName.ATK: 2, StatName.DEF: 1,
-            StatName.MOV: 3, StatName.RNG: 1, StatName.CRIT: 0
+            StatName.MOV: 3, StatName.RNG: 1, StatName.CRIT: 0, StatName.INIT: 9
         }),
-        items=[],
+        items=[spiked_club],
+        injuries=[],
+        auras=[],
+        skills=[],
+        ap_left=2
+    )
+
+    # Extra units: one per side with unique items
+    u1b = Unit(
+        id="u.player.2", side=Side.PLAYER, name="Archer", pos=(1, 2),
+        stats=StatBlock(base={
+            StatName.HP: 9, StatName.AP: 2, StatName.ATK: 2, StatName.DEF: 1,
+            StatName.MOV: 4, StatName.RNG: 2, StatName.CRIT: 5, StatName.INIT: 14
+        }),
+        items=[short_bow, light_boots],
+        injuries=[],
+        auras=[],
+        skills=[],
+        ap_left=2
+    )
+    u2b = Unit(
+        id="u.enemy.2", side=Side.ENEMY, name="Orc", pos=(6, 5),
+        stats=StatBlock(base={
+            StatName.HP: 11, StatName.AP: 2, StatName.ATK: 3, StatName.DEF: 2,
+            StatName.MOV: 3, StatName.RNG: 1, StatName.CRIT: 0, StatName.INIT: 8
+        }),
+        items=[hide_shield],
         injuries=[],
         auras=[],
         skills=[],
@@ -85,13 +137,13 @@ def default_demo_mission() -> Mission:
         id="m.demo",
         name="Bridge Clash",
         map=grid,
-        units={u1.id: u1, u2.id: u2},
+        units={u1.id: u1, u1b.id: u1b, u2.id: u2, u2b.id: u2b},
         side_to_move=Side.PLAYER,
         goals=[MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)],
         pre_events=[MissionEvent(id="e.start", text="Stop the goblin!")]
     )
 
-    mission.unit_order = [u1.id, u2.id]
+    mission.unit_order = [u1.id, u1b.id, u2.id, u2b.id]
     mission.current_unit_id = u1.id
     mission.current_unit_index = 0
 

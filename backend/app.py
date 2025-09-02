@@ -14,7 +14,7 @@ from .models.api import (
     MoveAction, AttackAction, UseSkillAction, EndTurnAction,
 )
 from .models.tbs import TBSSession, default_demo_mission
-from .models.common import Unit, Item, Mission
+from .models.common import Unit, Item, Mission, StatName
 from .engine.tbs_engine import TBSEngine
 from .storage import Storage, InMemoryStorage
 from .storage_redis import RedisStorage
@@ -108,6 +108,16 @@ def list_sessions():
 @app.post("/sessions", response_model=SessionView)
 def create_session(req: CreateSessionRequest):
     mission = req.mission or default_demo_mission()
+    # Initialize dynamic initiative order for fairness
+    try:
+        # Recompute based on INIT and set current unit
+        engine._recompute_initiative_order(mission)  # internal but fine for init
+        # Ensure the first unit has full AP
+        first = mission.units.get(mission.current_unit_id)
+        if first:
+            first.ap_left = engine._eff_stat(mission, first, StatName.AP)
+    except Exception:
+        pass
     sid = str(uuid4())
     sess = TBSSession(id=sid, mission=mission)
     storage.save(sess)

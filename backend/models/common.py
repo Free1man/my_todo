@@ -25,6 +25,7 @@ class StatName(str, Enum):
     MOV = "MOV"
     RNG = "RNG"
     CRIT = "CRIT"
+    INIT = "INIT"
 
 class Operation(str, Enum):
     """
@@ -126,7 +127,8 @@ class Unit(BaseModel):
         StatName.DEF: 1,
         StatName.MOV: 4,
         StatName.RNG: 1,
-        StatName.CRIT: 5,
+    StatName.CRIT: 5,
+    StatName.INIT: 10,
     }))
     items: List[Item] = Field(default_factory=list)
     injuries: List[Injury] = Field(default_factory=list)

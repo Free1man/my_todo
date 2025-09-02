@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Optional, Set, Tuple
+import random
 from pydantic import BaseModel
 
 from ..models.api import (
@@ -338,8 +339,37 @@ class TBSEngine:
                     kept.append(inj)
             u.injuries = kept
 
-        # move to next unit
-        mission.current_unit_index = (mission.current_unit_index + 1) % len(mission.unit_order)
+        # Advance to next index (wrap => recompute initiative and increment turn)
+        if not mission.unit_order:
+            mission.current_unit_id = None
+            return
+        next_index = mission.current_unit_index + 1
+        if next_index >= len(mission.unit_order):
+            self._recompute_initiative_order(mission)
+            mission.current_unit_index = 0
+            mission.turn += 1
+        else:
+            mission.current_unit_index = next_index
+
+        # Skip dead units; on wrap, recompute and increment turn again
+        visited = 0
+        while mission.unit_order:
+            uid = mission.unit_order[mission.current_unit_index]
+            u = mission.units.get(uid)
+            if u and u.alive:
+                break
+            # advance
+            mission.current_unit_index += 1
+            if mission.current_unit_index >= len(mission.unit_order):
+                self._recompute_initiative_order(mission)
+                mission.current_unit_index = 0
+                mission.turn += 1
+            visited += 1
+            if visited >= len(mission.unit_order):
+                # No living units left
+                mission.current_unit_id = None
+                return
+
         mission.current_unit_id = mission.unit_order[mission.current_unit_index] if mission.unit_order else None
 
         # refill AP for the new current unit
@@ -348,9 +378,16 @@ class TBSEngine:
             u.ap_left = self._eff_stat(mission, u, StatName.AP)
             mission.side_to_move = u.side
 
-        # increment turn when back to first unit
-        if mission.current_unit_index == 0:
-            mission.turn += 1
+    def _recompute_initiative_order(self, mission: Mission) -> None:
+        living_ids = [uid for uid, u in mission.units.items() if u.alive]
+        # Shuffle to ensure random tie-breakers are fair
+        random.shuffle(living_ids)
+        living_ids.sort(key=lambda uid: self._eff_stat(mission, mission.units[uid], StatName.INIT), reverse=True)
+        mission.unit_order = living_ids
+        # Set current side to the first unit's side
+        if mission.unit_order:
+            mission.current_unit_id = mission.unit_order[0]
+            mission.side_to_move = mission.units[mission.current_unit_id].side
 
 class InjuryFromMods(BaseModel):
     id: str = "inj.temp"
