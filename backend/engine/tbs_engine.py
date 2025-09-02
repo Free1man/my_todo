@@ -8,7 +8,8 @@ from ..models.api import (
     EvaluateResponse, LegalAction, LegalActionsResponse
 )
 from ..models.common import (
-    MapGrid, Mission, Operation, Side, Skill, SkillTarget,
+    GoalKind,
+    MapGrid, Mission, MissionStatus, Operation, Side, Skill, SkillTarget,
     StatModifier, StatName, Tile, Unit
 )
 from ..models.tbs import TBSSession
@@ -416,6 +417,25 @@ class TBSEngine:
         mission.current_unit_id = mission.initiative_order[0] if living else None
         if mission.current_unit_id:
             mission.side_to_move = mission.units[mission.current_unit_id].side
+
+    def check_victory_conditions(self, sess: TBSSession) -> MissionStatus:
+        mission = sess.mission
+        if mission.status != MissionStatus.IN_PROGRESS:
+            return mission.status
+
+        for goal in mission.goals:
+            if goal.kind == GoalKind.ELIMINATE_ALL_ENEMIES:
+                if not any(u.alive and u.side == Side.ENEMY for u in mission.units.values()):
+                    return MissionStatus.VICTORY
+            elif goal.kind == GoalKind.SURVIVE_TURNS:
+                if mission.turn >= (goal.survive_turns or 0):
+                    return MissionStatus.VICTORY
+
+        # Check for player defeat
+        if not any(u.alive and u.side == Side.PLAYER for u in mission.units.values()):
+            return MissionStatus.DEFEAT
+
+        return MissionStatus.IN_PROGRESS
 
 class InjuryFromMods(BaseModel):
     id: str = "inj.temp"

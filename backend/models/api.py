@@ -2,7 +2,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 from typing import List, Optional, Tuple, Literal
 
-from .common import Mission
+from .common import Mission, MissionStatus
 
 # ----- Actions (discriminated union) -----
 

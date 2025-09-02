@@ -148,6 +148,13 @@ class MissionGoal(BaseModel):
     kind: GoalKind
     survive_turns: Optional[int] = None
 
+
+class MissionStatus(str, Enum):
+    IN_PROGRESS = "IN_PROGRESS"
+    VICTORY = "VICTORY"
+    DEFEAT = "DEFEAT"
+
+
 class MissionEvent(BaseModel):
     id: str
     text: str
@@ -166,3 +173,4 @@ class Mission(BaseModel):
     global_mods: List[StatModifier] = Field(default_factory=list)
     initiative_order: List[str] = Field(default_factory=list)
     current_unit_id: Optional[str] = None
+    status: MissionStatus = MissionStatus.IN_PROGRESS

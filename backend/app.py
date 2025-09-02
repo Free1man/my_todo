@@ -14,7 +14,7 @@ from .models.api import (
     MoveAction, AttackAction, UseSkillAction, EndTurnAction,
 )
 from .models.tbs import TBSSession, default_demo_mission
-from .models.common import Unit, Item, Mission, StatName
+from .models.common import Unit, Item, Mission, StatName, MissionStatus
 from .engine.tbs_engine import TBSEngine
 from . import storage
 
@@ -130,6 +130,7 @@ def apply_action(sid: str, req: ApplyActionRequest):
     if not eval_result.legal:
         raise HTTPException(400, eval_result.explanation)
     new_state = engine.apply(sess, req.action)
+    new_state.mission.status = engine.check_victory_conditions(new_state)
     storage.save(new_state)
     return ApplyActionResponse(applied=True, explanation=eval_result.explanation,
                                session=SessionView(id=new_state.id, mission=new_state.mission))
