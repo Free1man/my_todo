@@ -63,7 +63,20 @@ def _create_tbs_session(base_url: str, mission: Mission) -> tuple[str, dict]:
     return sid, sess
 
 def _evaluate(base_url: str, sid: str, payload: dict) -> dict:
-    return _post(f"{base_url}/sessions/{sid}/evaluate", {"action": payload})
+    """Compatibility wrapper: emulate the old /evaluate by checking legal_actions.
+    Returns {legal: bool, explanation: str} for the specific action payload.
+    """
+    la = _get(f"{base_url}/sessions/{sid}/legal_actions")
+    for entry in la.get("actions", []):
+        a = entry.get("action", {})
+        if a.get("kind") != payload.get("kind"):
+            continue
+        # match on keys for MOVE and ATTACK (sufficient for tests)
+        if a.get("kind") == "MOVE" and a.get("unit_id") == payload.get("unit_id") and a.get("to") == payload.get("to"):
+            return {"legal": True, "explanation": entry.get("explanation", "ok")}
+        if a.get("kind") == "ATTACK" and a.get("attacker_id") == payload.get("attacker_id") and a.get("target_id") == payload.get("target_id"):
+            return {"legal": True, "explanation": entry.get("explanation", "ok")}
+    return {"legal": False, "explanation": "not in legal_actions"}
 
 def _apply(base_url: str, sid: str, payload: dict) -> dict:
     _post(f"{base_url}/sessions/{sid}/action", {"action": payload})

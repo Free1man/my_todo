@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any
 
 from .models.api import (
-    CreateSessionRequest, SessionView, EvaluateRequest, EvaluateResponse,
+    CreateSessionRequest, SessionView,
     ApplyActionRequest, ApplyActionResponse,
     LegalActionsResponse,
     MoveAction, AttackAction, UseSkillAction, EndTurnAction,
@@ -107,12 +107,7 @@ def get_session(sid: str):
         raise HTTPException(404, "session not found")
     return SessionView(id=sess.id, mission=sess.mission)
 
-@app.post("/sessions/{sid}/evaluate", response_model=EvaluateResponse)
-def evaluate_action(sid: str, req: EvaluateRequest):
-    sess = storage.get(sid)
-    if not sess:
-        raise HTTPException(404, "session not found")
-    return engine.evaluate(sess, req.action)
+# (Removed deprecated /sessions/{sid}/evaluate`; use `/sessions/{sid}/legal_actions` instead)
 
 @app.get("/sessions/{sid}/legal_actions", response_model=LegalActionsResponse)
 def list_legal_actions(sid: str, explain: bool = False):

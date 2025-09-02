@@ -180,19 +180,9 @@ function updateUI() {
 async function attemptAction(action) {
   if (!SID) return false;
   try {
-    const evalRes = await api(`/sessions/${SID}/evaluate`, {method:'POST', body: JSON.stringify({action})});
-    if (!evalRes.legal) {
-      log(`Action not legal: ${evalRes.explanation}`, 'error');
-  // Clear selection and hints when illegal action happens
-  SELECTED = null;
-  MOVE_HINTS.clear();
-  ATTACK_HINTS.clear();
-  document.querySelectorAll('.tile.selected').forEach(el => el.classList.remove('selected'));
-  updateUI();
-  render();
-      return false;
-    }
-    const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
+  // Re-evaluate before performing an action to get latest hints
+  await fetchLegalAndComputeHints();
+  const res = await api(`/sessions/${SID}/action`, {method:'POST', body: JSON.stringify({action})});
     STATE = res.session.mission;
     log(`Action applied: ${res.explanation}`, 'success');
     updateUI();
@@ -200,7 +190,13 @@ async function attemptAction(action) {
     render();
     return true;
   } catch (e) {
-    log(`Error: ${e.message}`, 'error');
+  // Try to parse server-provided error text for user-friendly message
+  log(`Action failed: ${e.message}`, 'error');
+  // Clear hints on failure to avoid stale UI
+  MOVE_HINTS.clear();
+  ATTACK_HINTS.clear();
+  updateUI();
+  render();
     return false;
   }
 }
@@ -327,6 +323,16 @@ function renderActiveUnitPanel() {
   };
   const itemsHtml = items.length ? items.map(it => `<span class="chip" title="${esc(itemTitle(it))}">${esc((it && it.name) || 'Item')}</span>`).join('') : '<span style="color:#777;">None</span>';
   const skillsHtml = skills.length ? skills.map(s => `<span class="chip" title="${(s && s.name) || 'Skill'}">${(s && s.name) || 'Skill'}</span>`).join('') : '<span style="color:#777;">None</span>';
+  // Build possible attacks for current unit from LEGAL_ACTIONS (with explain summaries)
+  const attackEntries = (LEGAL_ACTIONS || []).filter(e => e?.action?.kind === 'ATTACK' && e.action.attacker_id === u.id);
+  const attacksHtml = attackEntries.length ? attackEntries.map(e => {
+    const tgt = STATE.units[e.action.target_id];
+    const name = tgt ? `${tgt.name} (${tgt.side})` : e.action.target_id;
+    const sum = e.evaluation?.summary || 'Attack';
+    const dmg = e.evaluation ? ` · ${Math.round(e.evaluation.hit?.result ?? 100)}% · ${e.evaluation.min_damage.toFixed(0)}–${e.evaluation.max_damage.toFixed(0)} avg ${e.evaluation.expected_damage.toFixed(1)}` : '';
+    return `<button class="action-btn" data-act="attack" data-att="${e.action.attacker_id}" data-tgt="${e.action.target_id}" title="${sum}">Attack ${name}${dmg}</button>`;
+  }).join('') : '<span style="color:#777;">None</span>';
+
   wrap.innerHTML = `
     <h3>${u.name} <span style="font-weight:400; color:#666;">(${u.side})</span></h3>
     <div class="meta">Pos: ${pos[0]},${pos[1]} · AP: ${u.ap_left ?? 0}</div>
@@ -344,7 +350,19 @@ function renderActiveUnitPanel() {
     <div>${itemsHtml}</div>
     <div class="section-title">Skills</div>
     <div>${skillsHtml}</div>
+    <div class="section-title">Possible Attacks</div>
+    <div id="attack-options">${attacksHtml}</div>
   `;
+
+  // Wire attack buttons
+  document.querySelectorAll('#attack-options button[data-act="attack"]').forEach(btn => {
+    btn.onclick = async () => {
+      const attacker = btn.getAttribute('data-att');
+      const target = btn.getAttribute('data-tgt');
+      if (!attacker || !target) return;
+      await attemptAction({ kind:'ATTACK', attacker_id: attacker, target_id: target });
+    };
+  });
 }
 
 document.getElementById('new').onclick = async () => {
@@ -353,7 +371,6 @@ document.getElementById('new').onclick = async () => {
     const res = await api('/sessions', {method:'POST', body: JSON.stringify({})});
     SID = res.id;
     STATE = res.mission;
-    SELECTED = null;
     LEGAL_ACTIONS = [];
     log(`Session ${SID} created`);
     updateUI();
@@ -380,7 +397,7 @@ document.getElementById('create-session').onclick = async () => {
     const ta = document.getElementById('create-json');
     const editorEl = document.getElementById('create-editor');
     const controls = document.getElementById('editor-controls');
-    ta.value = JSON.stringify(example, null, 2);
+  ta.value = JSON.stringify(example, null, 2);
     document.getElementById('create-status').style.display = 'none';
     // Initialize JSONEditor if available
     if (window.JSONEditor) {
@@ -512,7 +529,6 @@ document.getElementById('legal').onclick = async () => {
     if (!SELECTED && STATE?.current_unit_id) SELECTED = STATE.current_unit_id;
     await fetchLegalAndComputeHints();
     render();
-    console.log('Legal actions:', LEGAL_ACTIONS);
     log(`Found ${LEGAL_ACTIONS.length} legal actions`);
   } catch (e) {
     log(`Error: ${e.message}`, 'error');
@@ -683,7 +699,7 @@ async function fetchLegalAndComputeHints() {
   // Only compute hints for the active unit via server legal actions
   if (STATE.current_unit_id !== SELECTED) return;
   try {
-    const res = await api(`/sessions/${SID}/legal_actions`);
+    const res = await api(`/sessions/${SID}/legal_actions?explain=true`);
     LEGAL_ACTIONS = res.actions || [];
   } catch (e) {
     log(`Error fetching legal actions: ${e.message}`, 'error');
@@ -696,7 +712,10 @@ async function fetchLegalAndComputeHints() {
     }
     if (a.kind === 'ATTACK' && a.attacker_id === SELECTED) {
       const tgt = STATE.units[a.target_id];
-      if (tgt && tgt.alive) ATTACK_HINTS.set(`${tgt.pos[0]},${tgt.pos[1]}`, tgt.id);
+      // Only highlight enemy targets for attack rings
+      if (tgt && tgt.alive && tgt.side !== STATE.units[SELECTED].side) {
+        ATTACK_HINTS.set(`${tgt.pos[0]},${tgt.pos[1]}`, tgt.id);
+      }
     }
   }
 }
@@ -705,8 +724,9 @@ function renderInitiativeQueue() {
   const wrap = document.getElementById('init-queue');
   if (!wrap) return;
   wrap.innerHTML = '';
-  if (!STATE || !Array.isArray(STATE.unit_order)) return;
-  STATE.unit_order.forEach(uid => {
+  const order = (STATE && Array.isArray(STATE.initiative_order)) ? STATE.initiative_order : [];
+  if (!order.length) return;
+  order.forEach(uid => {
     const u = STATE.units[uid];
     if (!u) return;
     const div = document.createElement('div');

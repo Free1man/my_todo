@@ -28,5 +28,8 @@ def test_info_examples_are_directly_usable(base_url: str):
     # Construct a minimal MOVE action directly (no longer sourced from /info)
     move = {"kind": "MOVE", "unit_id": any_uid, "to": [0, 1]}
 
-    r = requests.post(f"{base_url}/sessions/{s['id']}/evaluate", json={"action": move}, timeout=5)
-    assert r.status_code == 200
+    # Use consolidated endpoint to check that a MOVE is present among legal actions
+    la = requests.get(f"{base_url}/sessions/{s['id']}/legal_actions", params={"explain": "false"}, timeout=5)
+    la.raise_for_status()
+    acts = la.json().get("actions", [])
+    assert any(a.get("action", {}).get("kind") == "MOVE" for a in acts)
