@@ -146,6 +146,27 @@ class TBSEngine:
 
     # ---------- Internal helpers ----------
 
+    # ---- Public initializer (use this from app.py) ----
+    def initialize_mission(self, mission: Mission) -> None:
+        """Compute initiative order deterministically and prime the active unit with full AP.
+        If current_unit_id is provided, rotate the order so that it is first; otherwise pick first by INIT.
+        """
+        # Fresh recompute from stats
+        requested_cursor = mission.current_unit_id
+        self._recompute_initiative_order(mission)
+        # If a cursor was provided, rotate order to start there (if alive and present)
+        if requested_cursor and requested_cursor in mission.initiative_order:
+            idx = mission.initiative_order.index(requested_cursor)
+            mission.initiative_order = mission.initiative_order[idx:] + mission.initiative_order[:idx]
+        # Set current to first in order
+        mission.current_unit_id = mission.initiative_order[0] if mission.initiative_order else None
+        # Prime AP for the current unit if alive
+        if mission.current_unit_id:
+            u = mission.units.get(mission.current_unit_id)
+            if u and u.alive:
+                u.ap_left = self._eff_stat(mission, u, StatName.AP)
+                mission.side_to_move = u.side
+
     def _evaluate_action(self, mission: Mission, action: Action) -> Tuple[bool, str]:
         if isinstance(action, MoveAction):
             if action.unit_id not in mission.units:
@@ -216,7 +237,12 @@ class TBSEngine:
         return False, "unknown action"
 
     def _unit_can_act(self, mission: Mission, u: Unit) -> bool:
-        return u.alive and mission.current_unit_id == u.id
+        if not u.alive:
+            return False
+        if mission.current_unit_id:
+            return mission.current_unit_id == u.id
+        # fallback if no initiative yet
+        return True
 
     def _neighbors(self, grid: MapGrid, c: Coord) -> List[Coord]:
         x, y = c
@@ -338,55 +364,47 @@ class TBSEngine:
                     inj.mods = new_mods
                     kept.append(inj)
             u.injuries = kept
-
-        # Advance to next index (wrap => recompute initiative and increment turn)
-        if not mission.unit_order:
+        
+        # Advance initiative cursor and refill AP for the next living unit
+        order = mission.initiative_order or []
+        if not order:
+            self._recompute_initiative_order(mission)
+            order = mission.initiative_order
+        if not order:
             mission.current_unit_id = None
             return
-        next_index = mission.current_unit_index + 1
-        if next_index >= len(mission.unit_order):
-            self._recompute_initiative_order(mission)
-            mission.current_unit_index = 0
-            mission.turn += 1
-        else:
-            mission.current_unit_index = next_index
 
-        # Skip dead units; on wrap, recompute and increment turn again
-        visited = 0
-        while mission.unit_order:
-            uid = mission.unit_order[mission.current_unit_index]
-            u = mission.units.get(uid)
-            if u and u.alive:
+        try:
+            idx = order.index(mission.current_unit_id) if mission.current_unit_id in order else -1
+        except ValueError:
+            idx = -1
+        # find next living unit in order
+        n = len(order)
+        for step in range(1, n + 1):
+            candidate_id = order[(idx + step) % n]
+            cu = mission.units.get(candidate_id)
+            if cu and cu.alive:
+                mission.current_unit_id = candidate_id
+                cu.ap_left = self._eff_stat(mission, cu, StatName.AP)
+                mission.side_to_move = cu.side
                 break
-            # advance
-            mission.current_unit_index += 1
-            if mission.current_unit_index >= len(mission.unit_order):
-                self._recompute_initiative_order(mission)
-                mission.current_unit_index = 0
-                mission.turn += 1
-            visited += 1
-            if visited >= len(mission.unit_order):
-                # No living units left
-                mission.current_unit_id = None
-                return
-
-        mission.current_unit_id = mission.unit_order[mission.current_unit_index] if mission.unit_order else None
-
-        # refill AP for the new current unit
-        u = mission.units.get(mission.current_unit_id)
-        if u:
-            u.ap_left = self._eff_stat(mission, u, StatName.AP)
-            mission.side_to_move = u.side
+        else:
+            # nobody alive
+            mission.current_unit_id = None
 
     def _recompute_initiative_order(self, mission: Mission) -> None:
-        living_ids = [uid for uid, u in mission.units.items() if u.alive]
-        # Shuffle to ensure random tie-breakers are fair
-        random.shuffle(living_ids)
-        living_ids.sort(key=lambda uid: self._eff_stat(mission, mission.units[uid], StatName.INIT), reverse=True)
-        mission.unit_order = living_ids
-        # Set current side to the first unit's side
-        if mission.unit_order:
-            mission.current_unit_id = mission.unit_order[0]
+        # order: higher INIT first; tie-breaker: Player before Enemy; then stable by name
+        living: List[Unit] = [u for u in mission.units.values() if u.alive]
+        living.sort(
+            key=lambda u: (
+                -self._eff_stat(mission, u, StatName.INIT),
+                0 if u.side == Side.PLAYER else 1,
+                u.name,
+            )
+        )
+        mission.initiative_order = [u.id for u in living]
+        mission.current_unit_id = mission.initiative_order[0] if living else None
+        if mission.current_unit_id:
             mission.side_to_move = mission.units[mission.current_unit_id].side
 
 class InjuryFromMods(BaseModel):

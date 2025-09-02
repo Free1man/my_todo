@@ -127,8 +127,8 @@ class Unit(BaseModel):
         StatName.DEF: 1,
         StatName.MOV: 4,
         StatName.RNG: 1,
-    StatName.CRIT: 5,
-    StatName.INIT: 10,
+        StatName.CRIT: 5,
+        StatName.INIT: 10,
     }))
     items: List[Item] = Field(default_factory=list)
     injuries: List[Injury] = Field(default_factory=list)
@@ -164,6 +164,5 @@ class Mission(BaseModel):
     pre_events: List[MissionEvent] = Field(default_factory=list)
     post_events: List[MissionEvent] = Field(default_factory=list)
     global_mods: List[StatModifier] = Field(default_factory=list)
+    initiative_order: List[str] = Field(default_factory=list)
     current_unit_id: Optional[str] = None
-    unit_order: List[str] = Field(default_factory=list)
-    current_unit_index: int = 0

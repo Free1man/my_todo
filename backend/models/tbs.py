@@ -143,8 +143,4 @@ def default_demo_mission() -> Mission:
         pre_events=[MissionEvent(id="e.start", text="Stop the goblin!")]
     )
 
-    mission.unit_order = [u1.id, u1b.id, u2.id, u2b.id]
-    mission.current_unit_id = u1.id
-    mission.current_unit_index = 0
-
     return mission

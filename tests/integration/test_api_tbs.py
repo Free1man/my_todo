@@ -59,8 +59,6 @@ def _mission_from_state(info: dict, state: dict) -> dict:
         "turn": state.get("turn_number", 1),
         "goals": [], "pre_events": [], "post_events": [], "global_mods": [],
         "current_unit_id": current_uid,
-        "unit_order": order,
-        "current_unit_index": active_index,
     }
     return mission
 
