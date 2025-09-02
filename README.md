@@ -46,7 +46,7 @@ poetry run uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
 - `GET /sessions` - List all game sessions
 - `POST /sessions` - Create new game session
 - `GET /sessions/{id}` - Get specific game session
-- `POST /sessions/{id}/evaluate` - Dry-run action with explanation
+ - `GET /sessions/{id}/legal_actions` - List pre-evaluated legal actions (use `?explain=true` for detailed breakdowns)
 - `POST /sessions/{id}/action` - Apply game action
 
 ## Game Rules
