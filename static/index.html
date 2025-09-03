@@ -446,8 +446,6 @@
     async function attemptAction(action) {
       if (!SID) return false;
       try {
-        // Re-evaluate before performing an action to get latest hints
-        await fetchLegalAndComputeHints();
         const res = await api(`/sessions/${SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
         STATE = res.session.mission;
   // Constrain selection to the acting unit after state changes; clear preview
@@ -853,7 +851,7 @@
         // Click behavior:
         // - Left-click: perform actions only (attack if clicking an enemy). Does not preview or change selection.
         // - Right-click (contextmenu): preview this unit's possible moves/attacks without changing selection.
-        dot.onclick = async (e) => {
+    dot.onclick = async (e) => {
           e.stopPropagation();
           if (!u.alive) return;
 
@@ -862,10 +860,7 @@
           // Only attacks via left-click on enemy units
           if (u.side !== acting.side) {
             const action = { kind: 'ATTACK', attacker_id: acting.id, target_id: u.id };
-            await attemptAction(action);
-            PREVIEW_UNIT = null;
-            await fetchLegalAndComputeHints();
-            render();
+      await attemptAction(action);
             return;
           }
           // Clicking friendly units does nothing (selection stays on acting unit)
@@ -948,10 +943,6 @@
             log(`Attempting to move to ${to[0]},${to[1]}...`);
           }
           await attemptAction(action);
-          PREVIEW_UNIT = null;
-          // Refresh hints after the action
-          await fetchLegalAndComputeHints();
-          render();
         };
       });
     }
