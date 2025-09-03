@@ -76,6 +76,13 @@ def _evaluate(base_url: str, sid: str, payload: dict) -> dict:
             return {"legal": True, "explanation": entry.get("explanation", "ok")}
         if a.get("kind") == "ATTACK" and a.get("attacker_id") == payload.get("attacker_id") and a.get("target_id") == payload.get("target_id"):
             return {"legal": True, "explanation": entry.get("explanation", "ok")}
+        if a.get("kind") == "USE_SKILL" and a.get("unit_id") == payload.get("unit_id") and a.get("skill_id") == payload.get("skill_id"):
+            # If target_unit_id present, it must match
+            if payload.get("target_unit_id") and a.get("target_unit_id") != payload.get("target_unit_id"):
+                continue
+            return {"legal": True, "explanation": entry.get("explanation", "ok")}
+        if a.get("kind") == "END_TURN":
+            return {"legal": True, "explanation": entry.get("explanation", "ok")}
     return {"legal": False, "explanation": "not in legal_actions"}
 
 def _apply(base_url: str, sid: str, payload: dict) -> dict:

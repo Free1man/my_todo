@@ -3,6 +3,9 @@ from __future__ import annotations
 from backend.models.common import (
     GoalKind,
     Item,
+    Skill,
+    SkillKind,
+    SkillTarget,
     MapGrid,
     Mission,
     MissionGoal,
@@ -34,6 +37,41 @@ def short_bow_template() -> Item:
             StatModifier(stat=StatName.ATK, operation=Operation.ADDITIVE, value=1, source=ModifierSource.ITEM),
             StatModifier(stat=StatName.RNG, operation=Operation.ADDITIVE, value=1, source=ModifierSource.ITEM),
         ]
+    )
+
+# ----- Skill Templates -----
+
+def heal_skill_template(amount: int = 3, *, duration_turns: int | None = None) -> Skill:
+    """Simple heal skill that restores HP to an ally or self.
+    If duration_turns is provided with multiplicative/other ops it would be temporary; we use flat additive HP.
+    Costs 1 AP, range 3, target ally (including self when passed explicitly by tests using target_unit_id).
+    """
+    return Skill(
+        id="skill.heal.simple",
+        name="Heal",
+        kind=SkillKind.ACTIVE,
+        ap_cost=1,
+        range=3,
+        target=SkillTarget.ALLY_UNIT,
+        cooldown=0,
+        apply_mods=[
+            StatModifier(stat=StatName.HP, operation=Operation.ADDITIVE, value=amount, source=ModifierSource.SKILL, duration_turns=duration_turns)
+        ],
+    )
+
+def weaken_attack_skill_template(delta_atk: int = -2, *, duration_turns: int = 2) -> Skill:
+    """Debuff that reduces enemy ATK for a few turns (default 2). Costs 1 AP, range 3, target enemy."""
+    return Skill(
+        id="skill.debuff.weaken",
+        name="Weaken",
+        kind=SkillKind.ACTIVE,
+        ap_cost=1,
+        range=3,
+        target=SkillTarget.ENEMY_UNIT,
+        cooldown=0,
+        apply_mods=[
+            StatModifier(stat=StatName.ATK, operation=Operation.ADDITIVE, value=delta_atk, source=ModifierSource.SKILL, duration_turns=duration_turns)
+        ],
     )
 
 # ----- Unit Templates -----

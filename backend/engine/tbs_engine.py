@@ -61,10 +61,48 @@ class TBSEngine:
             if skill.charges is not None:
                 u.skill_charges[skill.id] = max(0, u.skill_charges.get(skill.id, skill.charges) - 1)
             if skill.apply_mods:
-                if skill.target in (SkillTarget.SELF, SkillTarget.NONE):
-                    self._attach_temp_mods(u, skill.apply_mods)
-                elif skill.target in (SkillTarget.ALLY_UNIT, SkillTarget.ENEMY_UNIT) and action.target_unit_id:
-                    self._attach_temp_mods(mission.units[action.target_unit_id], skill.apply_mods)
+                # Determine the unit that will receive the skill's effects
+                target_unit = u
+                if skill.target in (SkillTarget.ALLY_UNIT, SkillTarget.ENEMY_UNIT) and action.target_unit_id:
+                    target_unit = mission.units[action.target_unit_id]
+
+                # Split HP-direct effects vs. temporary modifiers
+                temp_mods: List[StatModifier] = []
+
+                # Helper: read MAX_HP tag if present to cap heals
+                def _max_hp_from_tags(unit: Unit) -> Optional[int]:
+                    for tag in unit.tags:
+                        if isinstance(tag, str) and tag.startswith("MAX_HP="):
+                            try:
+                                return int(tag.split("=", 1)[1])
+                            except Exception:
+                                return None
+                    return None
+
+                max_hp_cap = _max_hp_from_tags(target_unit)
+
+                for m in skill.apply_mods:
+                    if m.stat == StatName.HP:
+                        # Directly modify base HP for healing/damage skills
+                        if m.operation == Operation.ADDITIVE:
+                            cur = target_unit.stats.base.get(StatName.HP, 0)
+                            new_hp = cur + m.value
+                            if max_hp_cap is not None:
+                                new_hp = min(max_hp_cap, new_hp)
+                            target_unit.stats.base[StatName.HP] = max(0, new_hp)
+                        elif m.operation == Operation.OVERRIDE:
+                            val = m.value
+                            if max_hp_cap is not None:
+                                val = min(max_hp_cap, val)
+                            target_unit.stats.base[StatName.HP] = max(0, val)
+                        else:
+                            # Multiplicative and others are treated as temporary mods to HP
+                            temp_mods.append(m)
+                    else:
+                        temp_mods.append(m)
+
+                if temp_mods:
+                    self._attach_temp_mods(target_unit, temp_mods)
 
         elif isinstance(action, EndTurnAction):
             self._end_turn(mission)
@@ -238,6 +276,14 @@ class TBSEngine:
         # Fresh recompute from stats
         requested_cursor = mission.current_unit_id
         self._recompute_initiative_order(mission)
+        # Record each unit's initial max HP in tags for healing caps
+        for _u in mission.units.values():
+            try:
+                if not any(isinstance(t, str) and t.startswith("MAX_HP=") for t in _u.tags):
+                    base_hp = _u.stats.base.get(StatName.HP, 0)
+                    _u.tags.append(f"MAX_HP={base_hp}")
+            except Exception:
+                pass
         # If a cursor was provided, rotate order to start there (if alive and present)
         if requested_cursor and requested_cursor in mission.initiative_order:
             idx = mission.initiative_order.index(requested_cursor)
