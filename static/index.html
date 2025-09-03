@@ -55,9 +55,32 @@
       background: #ff9800;
     }
 
-    /* Selected/current highlights on the TILE to cover full square */
-    .tile.selected {
-      box-shadow: inset 0 0 0 3px #4caf50;
+  /* Selected/current highlights on the TILE to cover full square */
+    .tile.selected::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      /* Use a color not used by units: cyan */
+      border: 3px solid #00bcd4;
+      border-radius: 0;
+      pointer-events: none;
+      z-index: 3; /* above units (z-index:1) and attack ring (2) */
+      box-shadow: 0 0 2px rgba(0, 188, 212, 0.5) inset;
+    }
+
+    /* Current unit star badge in corner */
+    .tile.current::after {
+      content: "★";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 14px;
+      line-height: 1;
+      color: #ffca28; /* amber */
+      text-shadow: 0 1px 1px rgba(0,0,0,0.35);
+      pointer-events: none;
+      z-index: 4;
     }
 
     .tile.current {
@@ -282,8 +305,16 @@
 
     /* Move/attack hints */
     .tile.move {
-      background: #e6f4ea;
-      box-shadow: inset 0 0 0 2px rgba(76, 175, 80, 0.35);
+      /* Don't override terrain background; use outline only */
+      box-shadow: inset 0 0 0 2px rgba(76, 175, 80, 0.45);
+    }
+    .tile.move::after {
+      /* Semi-transparent overlay to hint movement without hiding terrain */
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(76, 175, 80, 0.18);
+      pointer-events: none;
     }
 
     .tile .ring {
@@ -365,6 +396,7 @@
           <div id="init-queue" class="queue"></div>
         </div>
         <div class="unit-card" id="active-unit">No active unit.</div>
+    <div class="unit-card" id="preview-unit">Click any unit to preview its MOV/RNG and possible moves/attacks.</div>
       </div>
     </div>
 
@@ -374,7 +406,8 @@
   <script>
     let SID = null;
     let STATE = null;
-    let SELECTED = null;
+  let SELECTED = null; // strictly the current acting unit
+  let PREVIEW_UNIT = null; // unit id being previewed (can be enemy or ally)
     let LEGAL_ACTIONS = [];
     let MOVE_HINTS = new Set();
     let ATTACK_HINTS = new Map(); // key: "x,y" => target unit id
@@ -417,6 +450,7 @@
       endTurnBtn.disabled = !SID;
       renderInitiativeQueue();
       renderActiveUnitPanel();
+  renderPreviewUnitPanel();
     }
 
     async function attemptAction(action) {
@@ -426,6 +460,9 @@
         await fetchLegalAndComputeHints();
         const res = await api(`/sessions/${SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
         STATE = res.session.mission;
+  // Constrain selection to the acting unit after state changes; clear preview
+  SELECTED = STATE.current_unit_id || null;
+  PREVIEW_UNIT = null;
         log(`Action applied: ${res.explanation}`, 'success');
         updateUI();
         await fetchLegalAndComputeHints();
@@ -496,7 +533,9 @@
               const sess = await api(`/sessions/${s.id}`);
               SID = sess.id;
               STATE = sess.mission;
-              SELECTED = null;
+              // select strictly the acting unit
+              SELECTED = sess.mission.current_unit_id || null;
+              PREVIEW_UNIT = null;
               LEGAL_ACTIONS = [];
               await fetchLegalAndComputeHints();
               log(`Loaded session ${SID}`);
@@ -611,9 +650,12 @@
       try {
         log('Creating new session...');
         const res = await api('/sessions', { method: 'POST', body: JSON.stringify({}) });
-        SID = res.id;
-        STATE = res.mission;
-        LEGAL_ACTIONS = [];
+  SID = res.id;
+  STATE = res.mission;
+  // select strictly the acting unit
+  SELECTED = STATE.current_unit_id || null;
+  PREVIEW_UNIT = null;
+  LEGAL_ACTIONS = [];
         log(`Session ${SID} created`);
         updateUI();
         await fetchLegalAndComputeHints();
@@ -694,9 +736,11 @@
           return;
         }
         const res = await api('/sessions', { method: 'POST', body: JSON.stringify(body) });
-        SID = res.id;
-        STATE = res.mission;
-        SELECTED = null;
+  SID = res.id;
+  STATE = res.mission;
+  // select strictly the acting unit
+  SELECTED = STATE.current_unit_id || null;
+  PREVIEW_UNIT = null;
         LEGAL_ACTIONS = [];
         log(`Custom session ${SID} created`);
         updateUI();
@@ -753,8 +797,10 @@
         log('Ending turn...');
         const action = { kind: 'END_TURN' };
         const res = await api(`/sessions/${SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
-        STATE = res.session.mission;
-        SELECTED = null;
+  STATE = res.session.mission;
+  // select strictly the acting unit
+  SELECTED = STATE.current_unit_id || null;
+  PREVIEW_UNIT = null;
         LEGAL_ACTIONS = [];
         log(`Turn ended: ${res.explanation}`, 'success');
         updateUI();
@@ -798,7 +844,7 @@
         }
       }
 
-      // Render units
+  // Render units
       Object.values(STATE.units).forEach(u => {
         const d = idx[`${u.pos[0]},${u.pos[1]}`];
         if (!d) return;
@@ -825,44 +871,39 @@
         dot.title = `${u.name} (${u.side})\nPos: ${u.pos[0]},${u.pos[1]}\n${allStats}`;
 
         // Click behavior:
-        // - If a friendly unit is selected and this is an enemy, try attack (don't change selection).
-        // - If this is an enemy and no selection, do nothing.
-        // - Otherwise, select this (friendly) unit.
+        // - Left-click: perform actions only (attack if clicking an enemy). Does not preview or change selection.
+        // - Right-click (contextmenu): preview this unit's possible moves/attacks without changing selection.
         dot.onclick = async (e) => {
           e.stopPropagation();
           if (!u.alive) return;
 
-          const selectedUnit = SELECTED ? STATE.units[SELECTED] : null;
-          const isCurrent = STATE.current_unit_id === u.id;
-
-          // If a unit is already selected and this clicked unit is on the opposite side, try to attack instead of selecting
-          if (selectedUnit && selectedUnit.alive && selectedUnit.id !== u.id && selectedUnit.side !== u.side) {
-            if (selectedUnit.id !== STATE.current_unit_id) {
-              log(`${selectedUnit.name} is not the active unit. It's ${STATE.units[STATE.current_unit_id]?.name}'s turn.`);
-              return;
-            }
-            const action = { kind: 'ATTACK', attacker_id: selectedUnit.id, target_id: u.id };
-            const ok = await attemptAction(action);
-            if (ok) return; // Keep selection on the attacker
-            return; // If illegal, stop without selecting the target
-          }
-
-          // Only allow selecting the current unit
-          if (!isCurrent) {
-            log(`${u.name} is not the active unit. It's ${STATE.units[STATE.current_unit_id]?.name}'s turn.`);
+          const acting = STATE.current_unit_id ? STATE.units[STATE.current_unit_id] : null;
+          if (!acting) return;
+          // Only attacks via left-click on enemy units
+          if (u.side !== acting.side) {
+            const action = { kind: 'ATTACK', attacker_id: acting.id, target_id: u.id };
+            await attemptAction(action);
+            PREVIEW_UNIT = null;
+            await fetchLegalAndComputeHints();
+            render();
             return;
           }
+          // Clicking friendly units does nothing (selection stays on acting unit)
+          if (u.id !== acting.id) {
+            log(`${u.name} is not the active unit. It's ${STATE.units[STATE.current_unit_id]?.name}'s turn.`);
+          }
+        };
 
-          // Select current unit
-          SELECTED = u.id;
-          updateUI();
-          // Remove previous tile selection and apply to this tile so the full square is highlighted
-          document.querySelectorAll('.tile.selected').forEach(el => el.classList.remove('selected'));
-          d.classList.add('selected');
-          log(`Selected ${u.name}`);
-          // After selecting, compute hints from server legal actions
+        // Right-click to preview info (MOV/RNG/AP, paths and targets)
+        dot.oncontextmenu = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!u.alive) return false;
+          PREVIEW_UNIT = u.id;
+          log(`Previewing ${u.name}`);
           await fetchLegalAndComputeHints();
           render();
+          return false;
         };
 
         d.appendChild(dot);
@@ -879,9 +920,9 @@
         }
       }
 
-      // Persist selection highlight across renders
-      if (SELECTED && STATE.units[SELECTED]) {
-        const su = STATE.units[SELECTED];
+      // Persist selection highlight across renders (acting unit only)
+      if (STATE.current_unit_id && STATE.units[STATE.current_unit_id]) {
+        const su = STATE.units[STATE.current_unit_id];
         const selTile = idx[`${su.pos[0]},${su.pos[1]}`];
         if (selTile) selTile.classList.add('selected');
       }
@@ -902,7 +943,7 @@
 
       // Handle tile clicks for movement/attacks
       g.querySelectorAll('.tile').forEach(tile => {
-        tile.onclick = async () => {
+  tile.onclick = async () => {
           if (!SID || !SELECTED) return;
 
           const to = [parseInt(tile.dataset.x), parseInt(tile.dataset.y)];
@@ -915,7 +956,7 @@
           );
 
           if (!isCurrentSel) {
-            log(`${selectedUnit.name} is not the active unit. It's ${STATE.units[STATE.current_unit_id]?.name}'s turn.`);
+            // Non-acting clicks on tiles are previews only; do nothing.
             return;
           }
           let action;
@@ -927,6 +968,7 @@
             log(`Attempting to move to ${to[0]},${to[1]}...`);
           }
           await attemptAction(action);
+          PREVIEW_UNIT = null;
           // Refresh hints after the action
           await fetchLegalAndComputeHints();
           render();
@@ -937,29 +979,118 @@
     async function fetchLegalAndComputeHints() {
       MOVE_HINTS.clear();
       ATTACK_HINTS.clear();
-      if (!SID || !SELECTED) return;
-      // Only compute hints for the active unit via server legal actions
-      if (STATE.current_unit_id !== SELECTED) return;
-      try {
-        const res = await api(`/sessions/${SID}/legal_actions?explain=true`);
-        LEGAL_ACTIONS = res.actions || [];
-      } catch (e) {
-        log(`Error fetching legal actions: ${e.message}`, 'error');
+      if (!SID || !STATE) return;
+
+      // Determine which unit to compute hints for: preview target if set, else the acting unit (SELECTED)
+      const targetId = PREVIEW_UNIT || SELECTED || STATE.current_unit_id;
+      if (!targetId) return;
+      const sel = STATE.units[targetId];
+      if (!sel) return;
+
+      // If the target is the active unit, use server-precise legal actions
+      if (STATE.current_unit_id === targetId) {
+        try {
+          const res = await api(`/sessions/${SID}/legal_actions?explain=true`);
+          LEGAL_ACTIONS = res.actions || [];
+        } catch (e) {
+          log(`Error fetching legal actions: ${e.message}`, 'error');
+          return;
+        }
+        for (const entry of LEGAL_ACTIONS) {
+          const a = entry.action || entry; // backend returns {action, explanation}
+          if (a.kind === 'MOVE' && a.unit_id === targetId && Array.isArray(a.to)) {
+            MOVE_HINTS.add(`${a.to[0]},${a.to[1]}`);
+          }
+          if (a.kind === 'ATTACK' && a.attacker_id === targetId) {
+            const tgt = STATE.units[a.target_id];
+            if (tgt && tgt.alive && tgt.side !== sel.side) {
+              ATTACK_HINTS.set(`${tgt.pos[0]},${tgt.pos[1]}`, tgt.id);
+            }
+          }
+        }
+        renderPreviewUnitPanel();
         return;
       }
-      for (const entry of LEGAL_ACTIONS) {
-        const a = entry.action || entry; // backend returns {action, explanation}
-        if (a.kind === 'MOVE' && a.unit_id === SELECTED && Array.isArray(a.to)) {
-          MOVE_HINTS.add(`${a.to[0]},${a.to[1]}`);
-        }
-        if (a.kind === 'ATTACK' && a.attacker_id === SELECTED) {
-          const tgt = STATE.units[a.target_id];
-          // Only highlight enemy targets for attack rings
-          if (tgt && tgt.alive && tgt.side !== STATE.units[SELECTED].side) {
-            ATTACK_HINTS.set(`${tgt.pos[0]},${tgt.pos[1]}`, tgt.id);
+
+      // Otherwise, compute a local estimate of reachable tiles and attackable enemies (preview mode, ignore AP)
+      const w = STATE.map.width, h = STATE.map.height;
+      const inBounds = (x, y) => 0 <= x && x < w && 0 <= y && y < h;
+      const terrainAt = (x, y) => STATE.map.tiles[y][x]?.terrain || 'PLAIN';
+      const walkable = (x, y) => {
+        const t = terrainAt(x, y);
+        if (t === 'BLOCKED' || t === 'WATER') return false;
+        return true;
+      };
+      const occupied = (x, y) => Object.values(STATE.units).some(u => u.alive && u.pos[0] === x && u.pos[1] === y);
+      const neighbors = (x, y) => [[x+1,y],[x-1,y],[x,y+1],[x,y-1]].filter(([nx, ny]) => inBounds(nx, ny));
+      const manhattan = (a, b) => Math.abs(a[0]-b[0]) + Math.abs(a[1]-b[1]);
+
+      const base = (sel.stats && sel.stats.base) || {};
+      const MOV = Number(base.MOV ?? base['MOV'] ?? 0);
+      const RNG = Number(base.RNG ?? base['RNG'] ?? 0);
+
+      // BFS for movement up to MOV, avoiding impassable terrain and occupied tiles
+      if (MOV > 0) {
+        const start = [sel.pos[0], sel.pos[1]];
+        const queue = [[start, 0]];
+        const seen = new Set([`${start[0]},${start[1]}`]);
+        while (queue.length) {
+          const [[x, y], d] = queue.shift();
+          if (d >= MOV) continue;
+          for (const [nx, ny] of neighbors(x, y)) {
+            const key = `${nx},${ny}`;
+            if (seen.has(key)) continue;
+            if (!walkable(nx, ny)) continue;
+            if (occupied(nx, ny)) continue;
+            seen.add(key);
+            MOVE_HINTS.add(key);
+            queue.push([[nx, ny], d+1]);
           }
         }
       }
+
+      // Attackable enemies within RNG (manhattan) — simple preview
+      if (RNG > 0) {
+        for (const other of Object.values(STATE.units)) {
+          if (!other.alive || other.id === sel.id) continue;
+          if (other.side === sel.side) continue;
+          if (manhattan(sel.pos, other.pos) <= RNG) {
+            ATTACK_HINTS.set(`${other.pos[0]},${other.pos[1]}`, other.id);
+          }
+        }
+      }
+      renderPreviewUnitPanel();
+    }
+
+    function renderPreviewUnitPanel() {
+      const wrap = document.getElementById('preview-unit');
+      if (!wrap) return;
+      if (!STATE) { wrap.innerHTML = 'No data.'; return; }
+      const uid = PREVIEW_UNIT || null;
+      if (!uid || !STATE.units[uid]) {
+        wrap.innerHTML = 'Click any unit to preview its MOV/RNG and possible moves/attacks.';
+        return;
+      }
+      const u = STATE.units[uid];
+      const base = (u.stats && u.stats.base) || {};
+      const get = (k) => base[k] ?? base[String(k)] ?? 0;
+      const MOV = get('MOV');
+      const RNG = get('RNG');
+      const AP = u.ap_left ?? get('AP') ?? 0;
+      const pos = Array.isArray(u.pos) ? u.pos : (u.pos || [0, 0]);
+      const moveCount = MOVE_HINTS.size;
+      const atkCount = ATTACK_HINTS.size;
+      const mode = (STATE.current_unit_id === uid) ? 'active (precise)' : 'preview (estimate)';
+      wrap.innerHTML = `
+        <h3>Preview: ${u.name} <span style="font-weight:400; color:#666;">(${u.side})</span></h3>
+        <div class="meta">Pos: ${pos[0]},${pos[1]} · Mode: ${mode}</div>
+        <div class="stats-grid">
+          <div><b>AP</b>: ${AP}</div>
+          <div><b>MOV</b>: ${MOV}</div>
+          <div><b>RNG</b>: ${RNG}</div>
+          <div><b>Hints</b>: ${moveCount} moves, ${atkCount} targets</div>
+        </div>
+      `;
     }
 
     function renderInitiativeQueue() {
