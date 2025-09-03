@@ -205,31 +205,63 @@
       font-size: 12px;
     }
 
-    /* Initiative queue */
+    /* Initiative queue: one container with multiple squares */
+    .queue-container {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      background: #fff;
+      margin-bottom: 10px;
+      width: 100%;
+    }
+    .queue-container .queue-header {
+      padding: 6px 8px;
+      font-weight: 600;
+      font-size: 12px;
+      color: #333;
+      border-bottom: 1px solid #eee;
+    }
     .queue {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-      align-items: center;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, 70px);
+      gap: 6px;
+      padding: 8px;
+      justify-content: start; /* left align when wrapping */
+      align-items: start;
     }
-
     .queue-item {
-      padding: 2px 6px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 11px;
-      background: #f7f7f7;
+      width: 70px;
+      height: 35px;
+      box-sizing: border-box;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      background: #fafafa;
+      padding: 3px 5px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      line-height: 1.15;
+      position: relative;
     }
-
-    .queue-item.current {
-      border-color: #2196f3;
-      background: #e3f2fd;
+    .queue-item .q-name { font-weight: 600; font-size: 8px; color: #222; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .queue-item .q-footer { display: flex; align-items: center; gap: 4px; margin-top: 1px; }
+    .queue-item .q-side { color: #666; font-size: 7px; text-transform: lowercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* INIT badge styling kept, now inline at bottom-right */
+    .queue-item .q-init { 
+      margin-left: auto;
+      color: #333; 
+      background: #f0f0f0; 
+      border: 1px solid #e0e0e0; 
+      border-radius: 10px; 
+  padding: 0 5px; 
+  font-size: 8px; 
+      line-height: 1.2; 
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; 
     }
-
-    .queue-item.dead {
-      opacity: 0.5;
-      text-decoration: line-through;
-    }
+    .queue-item.current { border-color: #2196f3; box-shadow: 0 0 0 2px #e3f2fd inset; }
+    .queue-item.dead { opacity: 0.55; }
+    .queue-item.side-PLAYER { border-left: 4px solid #4caf50; }
+    .queue-item.side-ENEMY { border-left: 4px solid #7e57c2; }
+    .queue-item.side-NEUTRAL { border-left: 4px solid #9e9e9e; }
 
     /* Active unit card */
     .unit-card {
@@ -370,9 +402,8 @@
 
   <div id="game" style="display:none;">
     <div class="panel">
-      <button id="end-turn" type="button" disabled>End Turn</button>
-      <button id="legal" type="button">Show Legal Actions</button>
-      <button id="show-sessions" type="button">Show Sessions</button>
+  <button id="end-turn" type="button" disabled>End Turn</button>
+  <button id="show-sessions" type="button">Show Sessions</button>
       <div class="status">
         <span>Session: <b id="sid">-</b></span> |
         <span>Turn: <b id="turn">-</b></span> |
@@ -388,15 +419,16 @@
       </div>
     </div>
 
+    <div class="queue-container">
+      <div class="queue-header">Initiative</div>
+      <div id="init-queue" class="queue"></div>
+    </div>
+
     <div class="board-row">
       <div id="grid"></div>
       <div class="sidebar">
-        <div>
-          <div class="status">Initiative:</div>
-          <div id="init-queue" class="queue"></div>
-        </div>
         <div class="unit-card" id="active-unit">No active unit.</div>
-    <div class="unit-card" id="preview-unit">Click any unit to preview its MOV/RNG and possible moves/attacks.</div>
+  <div class="unit-card" id="preview-unit">Right-click any unit to preview its MOV/RNG and possible moves/attacks.</div>
       </div>
     </div>
 
@@ -412,6 +444,17 @@
     let MOVE_HINTS = new Set();
     let ATTACK_HINTS = new Map(); // key: "x,y" => target unit id
     let CREATE_EDITOR = null; // JSONEditor instance when using tree mode
+
+    // Helpers
+    const getUnit = (id) => (STATE && id ? STATE.units[id] : null);
+    const tileKey = (x, y) => `${x},${y}`;
+    const manh = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+    const inBounds = (x, y) => STATE && 0 <= x && x < STATE.map.width && 0 <= y && y < STATE.map.height;
+    const terrainAt = (x, y) => STATE.map.tiles[y][x]?.terrain || 'PLAIN';
+    const isWalkable = (x, y) => { const t = terrainAt(x, y); return !(t === 'BLOCKED' || t === 'WATER'); };
+    const isOccupied = (x, y) => Object.values(STATE.units).some(u => u.alive && u.pos[0] === x && u.pos[1] === y);
+    const neighbors = (x, y) => [[x+1,y],[x-1,y],[x,y+1],[x,y-1]].filter(([nx, ny]) => inBounds(nx, ny));
+    const clearHints = () => { MOVE_HINTS.clear(); ATTACK_HINTS.clear(); };
 
     async function api(path, opts = {}) {
       const r = await fetch(path, { headers: { 'content-type': 'application/json' }, ...opts });
@@ -811,17 +854,7 @@
       }
     };
 
-    document.getElementById('legal').onclick = async () => {
-      if (!SID) return;
-      try {
-        if (!SELECTED && STATE?.current_unit_id) SELECTED = STATE.current_unit_id;
-        await fetchLegalAndComputeHints();
-        render();
-        log(`Found ${LEGAL_ACTIONS.length} legal actions`);
-      } catch (e) {
-        log(`Error: ${e.message}`, 'error');
-      }
-    };
+  // removed Show Legal Actions button and handler
 
     function render() {
       const g = document.getElementById('grid');
@@ -877,7 +910,7 @@
           e.stopPropagation();
           if (!u.alive) return;
 
-          const acting = STATE.current_unit_id ? STATE.units[STATE.current_unit_id] : null;
+          const acting = getUnit(STATE.current_unit_id);
           if (!acting) return;
           // Only attacks via left-click on enemy units
           if (u.side !== acting.side) {
@@ -1013,18 +1046,6 @@
       }
 
       // Otherwise, compute a local estimate of reachable tiles and attackable enemies (preview mode, ignore AP)
-      const w = STATE.map.width, h = STATE.map.height;
-      const inBounds = (x, y) => 0 <= x && x < w && 0 <= y && y < h;
-      const terrainAt = (x, y) => STATE.map.tiles[y][x]?.terrain || 'PLAIN';
-      const walkable = (x, y) => {
-        const t = terrainAt(x, y);
-        if (t === 'BLOCKED' || t === 'WATER') return false;
-        return true;
-      };
-      const occupied = (x, y) => Object.values(STATE.units).some(u => u.alive && u.pos[0] === x && u.pos[1] === y);
-      const neighbors = (x, y) => [[x+1,y],[x-1,y],[x,y+1],[x,y-1]].filter(([nx, ny]) => inBounds(nx, ny));
-      const manhattan = (a, b) => Math.abs(a[0]-b[0]) + Math.abs(a[1]-b[1]);
-
       const base = (sel.stats && sel.stats.base) || {};
       const MOV = Number(base.MOV ?? base['MOV'] ?? 0);
       const RNG = Number(base.RNG ?? base['RNG'] ?? 0);
@@ -1040,8 +1061,8 @@
           for (const [nx, ny] of neighbors(x, y)) {
             const key = `${nx},${ny}`;
             if (seen.has(key)) continue;
-            if (!walkable(nx, ny)) continue;
-            if (occupied(nx, ny)) continue;
+            if (!isWalkable(nx, ny)) continue;
+            if (isOccupied(nx, ny)) continue;
             seen.add(key);
             MOVE_HINTS.add(key);
             queue.push([[nx, ny], d+1]);
@@ -1054,7 +1075,7 @@
         for (const other of Object.values(STATE.units)) {
           if (!other.alive || other.id === sel.id) continue;
           if (other.side === sel.side) continue;
-          if (manhattan(sel.pos, other.pos) <= RNG) {
+          if (manh(sel.pos, other.pos) <= RNG) {
             ATTACK_HINTS.set(`${other.pos[0]},${other.pos[1]}`, other.id);
           }
         }
@@ -1102,11 +1123,19 @@
       order.forEach(uid => {
         const u = STATE.units[uid];
         if (!u) return;
-        const div = document.createElement('div');
-        div.className = 'queue-item' + (uid === STATE.current_unit_id ? ' current' : '') + (!u.alive ? ' dead' : '');
         const base = (u.stats && u.stats.base) || {};
         const init = base.INIT ?? base['INIT'] ?? 0;
-        div.textContent = `${u.name} (${u.side}) · INIT ${init}`;
+        const div = document.createElement('div');
+        div.className = 'queue-item side-' + u.side + (uid === STATE.current_unit_id ? ' current' : '') + (!u.alive ? ' dead' : '');
+        const nameShort = (u.name || '').slice(0, 10);
+        const sideShort = (u.side || '').toLowerCase().slice(0, 10);
+        div.innerHTML = `
+          <div class="q-name" title="${u.name}">${nameShort}</div>
+          <div class="q-footer">
+            <div class="q-side" title="${u.side.toLowerCase()}">${sideShort}</div>
+            <div class="q-init">${init}</div>
+          </div>
+        `;
         div.title = `Unit: ${u.name} (${u.side})\nINIT: ${init}`;
         wrap.appendChild(div);
       });
