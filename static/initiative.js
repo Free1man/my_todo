@@ -53,7 +53,7 @@
       line-height: 1.2;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
-    .queue-item.current { border-color: #2196f3; box-shadow: 0 0 0 2px #e3f2fd inset; }
+  .queue-item.current { border-color: #2196f3; background-color: #f4f9ff; }
     .queue-item.dead { opacity: 0.55; }
     .queue-item.side-PLAYER { border-left: 4px solid #4caf50; }
     .queue-item.side-ENEMY { border-left: 4px solid #7e57c2; }
@@ -85,29 +85,58 @@
     render(state) {
       const wrap = document.getElementById('init-queue');
       if (!wrap) return;
-      wrap.innerHTML = '';
       if (!state) return;
       const order = Array.isArray(state.initiative_order) ? state.initiative_order : [];
-      if (!order.length) return;
+      const desired = new Set(order.map(String));
+
+      // Index existing children by uid
+      const existing = new Map();
+      Array.from(wrap.children).forEach(el => {
+        const id = el.dataset && el.dataset.uid;
+        if (id) existing.set(id, el);
+      });
+
+      // Add/update in correct order
+      const fragment = document.createDocumentFragment();
       order.forEach(uid => {
         const u = state.units[uid];
         if (!u) return;
         const base = (u.stats && u.stats.base) || {};
         const init = base.INIT ?? base['INIT'] ?? 0;
-        const div = document.createElement('div');
-        div.className = 'queue-item side-' + u.side + (uid === state.current_unit_id ? ' current' : '') + (!u.alive ? ' dead' : '');
         const nameShort = (u.name || '').slice(0, 10);
-        const sideShort = (u.side || '').toLowerCase().slice(0, 10);
-        div.innerHTML = `
-          <div class="q-name" title="${u.name}">${nameShort}</div>
-          <div class="q-footer">
-            <div class="q-side" title="${u.side.toLowerCase()}">${sideShort}</div>
-            <div class="q-init">${init}</div>
-          </div>
-        `;
-        div.title = `Unit: ${u.name} (${u.side})\nINIT: ${init}`;
-        wrap.appendChild(div);
+        const sideFull = (u.side || '').toLowerCase();
+        const sideShort = sideFull.slice(0, 10);
+
+        let card = existing.get(String(uid));
+        if (!card) {
+          card = document.createElement('div');
+          card.dataset.uid = String(uid);
+          card.innerHTML = `
+            <div class="q-name" title="${u.name}">${nameShort}</div>
+            <div class="q-footer">
+              <div class="q-side" title="${sideFull}">${sideShort}</div>
+              <div class="q-init">${init}</div>
+            </div>
+          `;
+        } else {
+          // Update texts if needed
+          const qn = card.querySelector('.q-name');
+          const qs = card.querySelector('.q-side');
+          const qi = card.querySelector('.q-init');
+          if (qn) { qn.textContent = nameShort; qn.title = u.name; }
+          if (qs) { qs.textContent = sideShort; qs.title = sideFull; }
+          if (qi) { qi.textContent = String(init); }
+        }
+
+        // Update class
+        card.className = 'queue-item side-' + u.side + (uid === state.current_unit_id ? ' current' : '') + (!u.alive ? ' dead' : '');
+        card.title = `Unit: ${u.name} (${u.side})\nINIT: ${init}`;
+        fragment.appendChild(card);
       });
+
+      // Replace children in one pass to preserve nodes when possible
+      wrap.innerHTML = '';
+      wrap.appendChild(fragment);
     }
   };
 
