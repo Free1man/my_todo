@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Dict, List, Optional, Tuple
 
 import pytest
 import requests
-
 from backend.models.common import (
     GoalKind,
     MapGrid,
@@ -21,8 +19,7 @@ from backend.models.common import (
 )
 from tests.integration.utils.helpers import _create_tbs_session
 
-
-Coord = Tuple[int, int]
+Coord = tuple[int, int]
 logger = logging.getLogger(__name__)
 
 
@@ -52,8 +49,8 @@ def _make_unit(uid: str, name: str, side: Side, pos: Coord, init: int) -> Unit:
 
 def _spawn_line(
     side: Side, count: int, x: int, h: int, spacing: int = 9, init_base: int = 12
-) -> List[Unit]:
-    units: List[Unit] = []
+) -> list[Unit]:
+    units: list[Unit] = []
     ys = list(range(5, h - 5, spacing))[:count]
     for i, y in enumerate(ys):
         uid = f"{ 'p' if side == Side.PLAYER else 'e' }{i}"
@@ -82,19 +79,19 @@ def _manhattan(a: Coord, b: Coord) -> int:
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
-def _alive_counts(sess_json: dict) -> Tuple[int, int]:
-    units: Dict[str, dict] = sess_json["mission"]["units"]
+def _alive_counts(sess_json: dict) -> tuple[int, int]:
+    units: dict[str, dict] = sess_json["mission"]["units"]
     p = sum(1 for u in units.values() if u.get("alive", True) and u["side"] == "PLAYER")
     e = sum(1 for u in units.values() if u.get("alive", True) and u["side"] == "ENEMY")
     return p, e
 
 
 def _occupied_positions(sess_json: dict) -> set[Coord]:
-    units: Dict[str, dict] = sess_json["mission"]["units"]
+    units: dict[str, dict] = sess_json["mission"]["units"]
     return {tuple(u["pos"]) for u in units.values() if u.get("alive", True)}
 
 
-def _choose_move_destination(sess_json: dict, target: Coord) -> Optional[Coord]:
+def _choose_move_destination(sess_json: dict, target: Coord) -> Coord | None:
     mission = sess_json["mission"]
     uid = mission.get("current_unit_id")
     if not uid:
@@ -112,7 +109,7 @@ def _choose_move_destination(sess_json: dict, target: Coord) -> Optional[Coord]:
     dx = 0 if target[0] == me_pos[0] else (1 if target[0] > me_pos[0] else -1)
     dy = 0 if target[1] == me_pos[1] else (1 if target[1] > me_pos[1] else -1)
 
-    def path_clear(direction: Coord, steps: int) -> Optional[Coord]:
+    def path_clear(direction: Coord, steps: int) -> Coord | None:
         x, y = me_pos
         for k in range(1, steps + 1):
             nx, ny = x + direction[0] * k, y + direction[1] * k

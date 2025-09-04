@@ -1,16 +1,15 @@
-import os
-import subprocess
-from typing import Iterator
-import socket
-from contextlib import closing
-import time
 import json
+import logging
+import os
+import socket
+import subprocess
+import time
+from collections.abc import Iterator
+from contextlib import closing
+from pathlib import Path
 
 import pytest
-import logging
 import requests
-
-from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # Project root (docker-compose.yml is located here)
@@ -31,7 +30,7 @@ def _get_free_port(host: str = "127.0.0.1") -> int:
 def _load_cache():
     try:
         if CACHE_FILE.exists():
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(CACHE_FILE, encoding="utf-8") as f:
                 return json.load(f)
     except Exception as e:
         logger.debug("[tests] Failed to read cache %s: %s", CACHE_FILE, e)

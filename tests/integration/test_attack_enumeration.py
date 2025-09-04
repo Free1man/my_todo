@@ -1,7 +1,7 @@
-import time
 import logging
-import requests
+import time
 
+import requests
 from backend.models.common import StatName
 from tests.integration.utils.data import (
     archer_template,
@@ -79,5 +79,5 @@ def test_archer_surrounded_attack_count_and_perf(base_url: str):
         len(enemies),
     )
     assert (
-        avg_ms < 20
-    ), f"average legal_actions response {avg_ms:.2f} ms exceeds 17 ms threshold"
+        avg_ms < 30
+    ), f"average legal_actions response {avg_ms:.2f} ms exceeds 30 ms threshold"

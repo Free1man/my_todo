@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 import os
 import time
-from typing import Optional, List
-from redis import Redis
+
 from pydantic import TypeAdapter
+from redis import Redis
+
 from .models.tbs import TBSSession  # adjust import if needed
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
@@ -48,7 +50,7 @@ def save(sess: TBSSession) -> None:
     _enforce_cap()
 
 
-def get(sid: str) -> Optional[TBSSession]:
+def get(sid: str) -> TBSSession | None:
     raw = r.get(_k(sid))
     if raw is None:
         # cleanup stale index entry if it exists
@@ -69,7 +71,7 @@ def delete(sid: str) -> bool:
     return bool(res and res[0])
 
 
-def list_all() -> List[TBSSession]:
+def list_all() -> list[TBSSession]:
     sids = r.zrevrange(INDEX, 0, -1)
     if not sids:
         return []

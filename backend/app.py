@@ -1,26 +1,28 @@
 from __future__ import annotations
+
+from typing import Any
 from uuid import uuid4
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict, Any
 
+from . import storage
+from .engine.tbs_engine import TBSEngine
 from .models.api import (
-    CreateSessionRequest,
-    SessionView,
     ApplyActionRequest,
     ApplyActionResponse,
+    AttackAction,
+    CreateSessionRequest,
+    EndTurnAction,
     LegalActionsResponse,
     MoveAction,
-    AttackAction,
+    SessionView,
     UseSkillAction,
-    EndTurnAction,
 )
+from .models.common import Item, Mission, Unit
 from .models.tbs import TBSSession, default_demo_mission
-from .models.common import Unit, Item, Mission
-from .engine.tbs_engine import TBSEngine
-from . import storage
 
 app = FastAPI(title="Abstract Tactics - TBS Only")
 engine = TBSEngine()
@@ -40,7 +42,7 @@ def index():
 
 
 @app.get("/health")
-def health() -> Dict[str, Any]:
+def health() -> dict[str, Any]:
     ok = True
     try:
         storage.r.ping()

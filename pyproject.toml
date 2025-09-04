@@ -21,18 +21,42 @@ pytest = "*"
 pytest-xdist = "*"
 requests = "*"
 pytest-timeout = "*"
-pre-commit = "^4.3.0"
+pre-commit = "*"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-
+[tool.black]
+line-length = 88
+target-version = ["py313"]
 
 [tool.ruff]
-# Make Ruff fast and opinionated
 target-version = "py313"
 line-length = 88
-fix = true
-# unsafe-fixes = true
-# pre-commit run -a
+src = ["backend"]
+# don't waste time scanning non-Python stuff or build junk
+exclude = [
+  ".git", ".venv", "venv", ".mypy_cache", ".ruff_cache", ".pytest_cache",
+  "static", "dist", "build"
+]
+#unsafe-fixes = true
+
+[tool.ruff.lint]
+# Minimal, useful rule packs:
+# E/F: core errors; I: import order; UP: modern syntax; B: common bugs
+# SIM: simple refactors; C4: comprehensions; ISC: implicit-str-concat guard
+# TCH: move imports under TYPE_CHECKING; PD: Pydantic best practices
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "ISC", "TCH", "PD"]
+
+# Play nice with Black (wrap length + E203 colon spacing)
+ignore = ["E501", "E203"]
+
+[tool.ruff.lint.per-file-ignores]
+# allow re-export patterns
+"**/__init__.py" = ["F401"]
+"backend/models/api.py" = ["TCH"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-wrap-aliases = true

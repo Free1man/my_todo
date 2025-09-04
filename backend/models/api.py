@@ -1,6 +1,8 @@
 from __future__ import annotations
+
+from typing import Literal
+
 from pydantic import BaseModel
-from typing import List, Optional, Tuple, Literal
 
 from .common import Mission
 from .tbs import ActionEvaluation
@@ -11,7 +13,7 @@ from .tbs import ActionEvaluation
 class MoveAction(BaseModel):
     kind: Literal["MOVE"] = "MOVE"
     unit_id: str
-    to: Tuple[int, int]
+    to: tuple[int, int]
 
 
 class AttackAction(BaseModel):
@@ -24,8 +26,8 @@ class UseSkillAction(BaseModel):
     kind: Literal["USE_SKILL"] = "USE_SKILL"
     unit_id: str
     skill_id: str
-    target_unit_id: Optional[str] = None
-    target_tile: Optional[Tuple[int, int]] = None
+    target_unit_id: str | None = None
+    target_tile: tuple[int, int] | None = None
 
 
 class EndTurnAction(BaseModel):
@@ -37,7 +39,7 @@ Action = MoveAction | AttackAction | UseSkillAction | EndTurnAction
 
 # ----- API IO -----
 class CreateSessionRequest(BaseModel):
-    mission: Optional[Mission] = None
+    mission: Mission | None = None
 
 
 class SessionView(BaseModel):
@@ -70,8 +72,8 @@ class ApplyActionResponse(BaseModel):
 class LegalAction(BaseModel):
     action: Action
     explanation: str  # already evaluated and legal
-    evaluation: Optional[ActionEvaluation] = None
+    evaluation: ActionEvaluation | None = None
 
 
 class LegalActionsResponse(BaseModel):
-    actions: List[LegalAction]
+    actions: list[LegalAction]

@@ -1,44 +1,44 @@
 from __future__ import annotations
-from typing import List, Optional, Set, Tuple
+
 from pydantic import BaseModel
 
 from ..models.api import (
     Action,
-    MoveAction,
     AttackAction,
-    UseSkillAction,
     EndTurnAction,
     EvaluateResponse,
     LegalAction,
     LegalActionsResponse,
+    MoveAction,
+    UseSkillAction,
 )
 from ..models.common import (
     GoalKind,
     MapGrid,
     Mission,
     MissionStatus,
+    ModifierSource,
     Operation,
     Side,
     SkillTarget,
     StatModifier,
     StatName,
     Unit,
-    ModifierSource,
 )
 from ..models.tbs import (
-    TBSSession,
     ActionEvaluation,
-    StatBreakdown,
-    StatTerm,
-    TermKind,
-    Op,
     DamageBreakdown,
     HitChanceBreakdown,
+    Op,
     Penetration,
     ResistEntry,
+    StatBreakdown,
+    StatTerm,
+    TBSSession,
+    TermKind,
 )
 
-Coord = Tuple[int, int]
+Coord = tuple[int, int]
 
 
 class TBSEngine:
@@ -86,10 +86,10 @@ class TBSEngine:
                     target_unit = mission.units[action.target_unit_id]
 
                 # Split HP-direct effects vs. temporary modifiers
-                temp_mods: List[StatModifier] = []
+                temp_mods: list[StatModifier] = []
 
                 # Helper: read MAX_HP tag if present to cap heals
-                def _max_hp_from_tags(unit: Unit) -> Optional[int]:
+                def _max_hp_from_tags(unit: Unit) -> int | None:
                     for tag in unit.tags:
                         if isinstance(tag, str) and tag.startswith("MAX_HP="):
                             try:
@@ -136,7 +136,7 @@ class TBSEngine:
         pre-evaluated with explanations (so clients do not spam /evaluate).
         """
         m = sess.mission
-        out: List[LegalAction] = []
+        out: list[LegalAction] = []
 
         added_end_turn = False
 
@@ -235,7 +235,7 @@ class TBSEngine:
         value: float
         breakdown: StatBreakdown
 
-    def _map_source_to_kind(self, src: Optional[ModifierSource]) -> TermKind:
+    def _map_source_to_kind(self, src: ModifierSource | None) -> TermKind:
         if src == ModifierSource.ITEM:
             return TermKind.ITEM
         if src == ModifierSource.AURA:
@@ -251,11 +251,11 @@ class TBSEngine:
 
     def _eff_stat_with_trace(
         self, mission: Mission, u: Unit, stat: StatName
-    ) -> "TBSEngine.EffStat":
+    ) -> TBSEngine.EffStat:
         base_val = u.stats.base.get(stat, 0)
 
         # Collect modifiers exactly like _eff_stat
-        all_mods: List[StatModifier] = []
+        all_mods: list[StatModifier] = []
         for it in u.items:
             all_mods.extend(it.mods)
         for inj in u.injuries:
@@ -278,8 +278,8 @@ class TBSEngine:
 
         add_flat = 0
         mul = 1.0
-        override: Optional[int] = None
-        terms: List[StatTerm] = []
+        override: int | None = None
+        terms: list[StatTerm] = []
 
         for m in all_mods:
             if m.stat != stat:
@@ -365,7 +365,7 @@ class TBSEngine:
                 u.ap_left = self._eff_stat(mission, u, StatName.AP)
                 mission.side_to_move = u.side
 
-    def _evaluate_action(self, mission: Mission, action: Action) -> Tuple[bool, str]:
+    def _evaluate_action(self, mission: Mission, action: Action) -> tuple[bool, str]:
         if isinstance(action, MoveAction):
             if action.unit_id not in mission.units:
                 return False, "unknown unit"
@@ -452,7 +452,7 @@ class TBSEngine:
         # Fallback: if no unit is active, no unit can act.
         return False
 
-    def _neighbors(self, grid: MapGrid, c: Coord) -> List[Coord]:
+    def _neighbors(self, grid: MapGrid, c: Coord) -> list[Coord]:
         x, y = c
         cand = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
         return [
@@ -464,14 +464,14 @@ class TBSEngine:
     def _occupied(self, mission: Mission, c: Coord) -> bool:
         return any(u.alive and u.pos == c for u in mission.units.values())
 
-    def _reachable_tiles(self, mission: Mission, u: Unit) -> Set[Coord]:
+    def _reachable_tiles(self, mission: Mission, u: Unit) -> set[Coord]:
         mov = max(0, self._eff_stat(mission, u, StatName.MOV))
         if mov == 0:
             return set()
         grid = mission.map
-        frontier: List[Tuple[Coord, int]] = [(u.pos, 0)]
-        seen: Set[Coord] = {u.pos}
-        reach: Set[Coord] = {u.pos}
+        frontier: list[tuple[Coord, int]] = [(u.pos, 0)]
+        seen: set[Coord] = {u.pos}
+        reach: set[Coord] = {u.pos}
         while frontier:
             cur, d = frontier.pop(0)
             if d >= mov:
@@ -495,10 +495,10 @@ class TBSEngine:
     def _eff_stat(self, mission: Mission, u: Unit, stat: StatName) -> int:
         value = u.stats.base.get(stat, 0)
 
-        def apply_mods(mods: List[StatModifier], cur: int) -> int:
+        def apply_mods(mods: list[StatModifier], cur: int) -> int:
             add = 0
             mul = 1.0
-            override: Optional[int] = None
+            override: int | None = None
             for m in mods:
                 if m.stat != stat:
                     continue
@@ -511,7 +511,7 @@ class TBSEngine:
             base = cur if override is None else override
             return max(int(base * mul) + add, 0)
 
-        all_mods: List[StatModifier] = []
+        all_mods: list[StatModifier] = []
         # items & injuries attached to this unit
         for it in u.items:
             all_mods.extend(it.mods)
@@ -569,8 +569,8 @@ class TBSEngine:
         pre_mitigation = max(0.0, atk.value - effective_def)
         raw_after_def = pre_mitigation * skill_ratio + flat_power
 
-        vulns: List[ResistEntry] = []
-        atk_mult_terms: List[StatTerm] = []
+        vulns: list[ResistEntry] = []
+        atk_mult_terms: list[StatTerm] = []
 
         final_before_crit = raw_after_def
         # Crit expectation aligned with _compute_damage: crit only if CRIT >= 100
@@ -624,7 +624,7 @@ class TBSEngine:
         acc_bd = StatBreakdown(name="accuracy", base=0.0, terms=[], result=0.0)
         eva_bd = StatBreakdown(name="evasion", base=0.0, terms=[], result=0.0)
         hit_base = 100.0
-        hit_mods: List[StatTerm] = []
+        hit_mods: list[StatTerm] = []
         hit_result = 100.0
         hit_bd = HitChanceBreakdown(
             accuracy=acc_bd,
@@ -659,7 +659,7 @@ class TBSEngine:
                 return s
         return None
 
-    def _attach_temp_mods(self, u: Unit, mods: List[StatModifier]) -> None:
+    def _attach_temp_mods(self, u: Unit, mods: list[StatModifier]) -> None:
         inj = InjuryFromMods(mods)
         u.injuries.append(inj)
 
@@ -728,7 +728,7 @@ class TBSEngine:
 
     def _recompute_initiative_order(self, mission: Mission) -> None:
         # order: higher INIT first; tie-breaker: Player before Enemy; then stable by name
-        living: List[Unit] = [u for u in mission.units.values() if u.alive]
+        living: list[Unit] = [u for u in mission.units.values() if u.alive]
         living.sort(
             key=lambda u: (
                 -self._eff_stat(mission, u, StatName.INIT),
@@ -752,9 +752,10 @@ class TBSEngine:
                     u.alive and u.side == Side.ENEMY for u in mission.units.values()
                 ):
                     return MissionStatus.VICTORY
-            elif goal.kind == GoalKind.SURVIVE_TURNS:
-                if mission.turn >= (goal.survive_turns or 0):
-                    return MissionStatus.VICTORY
+            elif goal.kind == GoalKind.SURVIVE_TURNS and mission.turn >= (
+                goal.survive_turns or 0
+            ):
+                return MissionStatus.VICTORY
 
         # Check for player defeat
         if not any(u.alive and u.side == Side.PLAYER for u in mission.units.values()):
@@ -766,9 +767,9 @@ class TBSEngine:
 class InjuryFromMods(BaseModel):
     id: str = "inj.temp"
     name: str = "Temporary Effect"
-    mods: List[StatModifier]
+    mods: list[StatModifier]
 
-    def __init__(self, mods: List[StatModifier]):
+    def __init__(self, mods: list[StatModifier]):
         super().__init__(mods=mods)
 
 

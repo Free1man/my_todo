@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+
 from pydantic import BaseModel, Field
 
-Coord = Tuple[int, int]  # (x, y)
+Coord = tuple[int, int]  # (x, y)
 
 
 class Side(str, Enum):
@@ -58,12 +59,12 @@ class StatModifier(BaseModel):
     operation: Operation
     value: int
     source: ModifierSource = ModifierSource.GLOBAL
-    tag: Optional[str] = None
-    duration_turns: Optional[int] = None  # None = persistent while source exists
+    tag: str | None = None
+    duration_turns: int | None = None  # None = persistent while source exists
 
 
 class StatBlock(BaseModel):
-    base: Dict[StatName, int] = Field(default_factory=dict)
+    base: dict[StatName, int] = Field(default_factory=dict)
 
 
 class SkillKind(str, Enum):
@@ -87,34 +88,34 @@ class Skill(BaseModel):
     range: int = 0
     target: SkillTarget = SkillTarget.NONE
     cooldown: int = 0
-    charges: Optional[int] = None
-    apply_mods: List[StatModifier] = Field(default_factory=list)
-    passive_mods: List[StatModifier] = Field(default_factory=list)
+    charges: int | None = None
+    apply_mods: list[StatModifier] = Field(default_factory=list)
+    passive_mods: list[StatModifier] = Field(default_factory=list)
 
 
 class Item(BaseModel):
     id: str = "item.example"
     name: str = "Item"
-    mods: List[StatModifier] = Field(default_factory=list)
+    mods: list[StatModifier] = Field(default_factory=list)
 
 
 class Injury(BaseModel):
     id: str
     name: str
-    mods: List[StatModifier] = Field(default_factory=list)
+    mods: list[StatModifier] = Field(default_factory=list)
 
 
 class Aura(BaseModel):
     id: str
     name: str
     radius: int
-    mods: List[StatModifier] = Field(default_factory=list)
-    owner_unit_id: Optional[str] = None
+    mods: list[StatModifier] = Field(default_factory=list)
+    owner_unit_id: str | None = None
 
 
 class Tile(BaseModel):
     terrain: Terrain = Terrain.PLAIN
-    mods: List[StatModifier] = Field(default_factory=list)
+    mods: list[StatModifier] = Field(default_factory=list)
 
     @property
     def walkable(self) -> bool:
@@ -124,7 +125,7 @@ class Tile(BaseModel):
 class MapGrid(BaseModel):
     width: int
     height: int
-    tiles: List[List[Tile]]  # tiles[y][x]
+    tiles: list[list[Tile]]  # tiles[y][x]
 
     def in_bounds(self, c: Coord) -> bool:
         x, y = c
@@ -154,15 +155,15 @@ class Unit(BaseModel):
             }
         )
     )
-    items: List[Item] = Field(default_factory=list)
-    injuries: List[Injury] = Field(default_factory=list)
-    auras: List[Aura] = Field(default_factory=list)
-    skills: List[Skill] = Field(default_factory=list)
-    tags: List[str] = Field(default_factory=list)
+    items: list[Item] = Field(default_factory=list)
+    injuries: list[Injury] = Field(default_factory=list)
+    auras: list[Aura] = Field(default_factory=list)
+    skills: list[Skill] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     alive: bool = True
     ap_left: int = 0
-    skill_cooldowns: Dict[str, int] = Field(default_factory=dict)
-    skill_charges: Dict[str, int] = Field(default_factory=dict)
+    skill_cooldowns: dict[str, int] = Field(default_factory=dict)
+    skill_charges: dict[str, int] = Field(default_factory=dict)
 
 
 class GoalKind(str, Enum):
@@ -172,7 +173,7 @@ class GoalKind(str, Enum):
 
 class MissionGoal(BaseModel):
     kind: GoalKind
-    survive_turns: Optional[int] = None
+    survive_turns: int | None = None
 
 
 class MissionStatus(str, Enum):
@@ -190,14 +191,14 @@ class Mission(BaseModel):
     id: str
     name: str
     map: MapGrid
-    units: Dict[str, Unit]
+    units: dict[str, Unit]
     side_to_move: Side = Side.PLAYER
     turn: int = 1
-    max_turns: Optional[int] = None
-    goals: List[MissionGoal] = Field(default_factory=list)
-    pre_events: List[MissionEvent] = Field(default_factory=list)
-    post_events: List[MissionEvent] = Field(default_factory=list)
-    global_mods: List[StatModifier] = Field(default_factory=list)
-    initiative_order: List[str] = Field(default_factory=list)
-    current_unit_id: Optional[str] = None
+    max_turns: int | None = None
+    goals: list[MissionGoal] = Field(default_factory=list)
+    pre_events: list[MissionEvent] = Field(default_factory=list)
+    post_events: list[MissionEvent] = Field(default_factory=list)
+    global_mods: list[StatModifier] = Field(default_factory=list)
+    initiative_order: list[str] = Field(default_factory=list)
+    current_unit_id: str | None = None
     status: MissionStatus = MissionStatus.IN_PROGRESS

@@ -3,16 +3,16 @@ import json
 from backend.models.api import AttackAction, UseSkillAction
 from backend.models.common import StatName
 from tests.integration.utils.data import (
-    hero_template,
     goblin_template,
-    simple_mission,
     heal_skill_template,
+    hero_template,
+    simple_mission,
     weaken_attack_skill_template,
 )
 from tests.integration.utils.helpers import (
+    _apply,
     _create_tbs_session,
     _evaluate,
-    _apply,
     _hp_of,
 )
 

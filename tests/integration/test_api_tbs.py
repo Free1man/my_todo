@@ -1,7 +1,9 @@
 # tests/integration/test_api_tbs.py
 import json
+
 import pytest
 import requests
+import requests as _requests
 from backend.models.api import AttackAction
 from backend.models.common import StatName
 from tests.integration.utils.data import (
@@ -17,7 +19,6 @@ from tests.integration.utils.helpers import (
     _evaluate,
     _hp_of,
 )
-import requests as _requests
 
 
 # ---------- tests ----------
@@ -71,7 +72,7 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
     assert evj is not None, f"expected evaluation for ATTACK {attacker.id}->{target.id}"
     assert evj["action_type"] == "attack"
     assert evj["attacker_id"] == attacker.id and evj["target_id"] == target.id
-    assert isinstance(evj.get("expected_damage"), (int, float))
+    assert isinstance(evj.get("expected_damage"), int | float)
     assert "Hit" in evj.get("summary", "")
 
     sess = _apply(base_url, sid, atk_payload)
