@@ -1,7 +1,7 @@
 import json
 
 from backend.models.api import AttackAction, UseSkillAction
-from backend.models.common import StatName
+from backend.models.enums import StatName
 from tests.integration.utils.data import (
     goblin_template,
     heal_skill_template,

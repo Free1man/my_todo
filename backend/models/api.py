@@ -4,8 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from .common import Mission
-from .tbs import ActionEvaluation
+from .evaluation import ActionEvaluation
+from .mission import Mission
 
 # ----- Actions (discriminated union) -----
 

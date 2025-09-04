@@ -5,18 +5,11 @@ import logging
 
 import pytest
 import requests
-from backend.models.common import (
-    GoalKind,
-    MapGrid,
-    Mission,
-    MissionGoal,
-    Side,
-    StatBlock,
-    StatName,
-    Terrain,
-    Tile,
-    Unit,
-)
+from backend.models.enums import GoalKind, Side, StatName, Terrain
+from backend.models.map import MapGrid, Tile
+from backend.models.mission import Mission, MissionGoal
+from backend.models.modifiers import StatBlock
+from backend.models.units import Unit
 from tests.integration.utils.helpers import _create_tbs_session
 
 Coord = tuple[int, int]

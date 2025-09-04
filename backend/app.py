@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import storage
 from .engine.tbs_engine import TBSEngine
+from .missions.demo import default_demo_mission
 from .models.api import (
     ApplyActionRequest,
     ApplyActionResponse,
@@ -21,8 +22,10 @@ from .models.api import (
     SessionView,
     UseSkillAction,
 )
-from .models.common import Item, Mission, Unit
-from .models.tbs import TBSSession, default_demo_mission
+from .models.mission import Mission
+from .models.session import TBSSession
+from .models.skills import Item
+from .models.units import Unit
 
 app = FastAPI(title="Abstract Tactics - TBS Only")
 engine = TBSEngine()

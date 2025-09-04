@@ -2,7 +2,8 @@
 import json
 
 from backend.models.api import AttackAction
-from backend.models.common import GoalKind, MissionGoal, StatName
+from backend.models.enums import StatName
+from backend.models.mission import GoalKind, MissionGoal
 from tests.integration.utils.data import (
     goblin_template,
     hero_template,

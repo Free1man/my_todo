@@ -12,31 +12,31 @@ from ..models.api import (
     MoveAction,
     UseSkillAction,
 )
-from ..models.common import (
+from ..models.enums import (
     GoalKind,
-    MapGrid,
-    Mission,
     MissionStatus,
     ModifierSource,
+    Op,
     Operation,
     Side,
     SkillTarget,
-    StatModifier,
     StatName,
-    Unit,
+    TermKind,
 )
-from ..models.tbs import (
+from ..models.evaluation import (
     ActionEvaluation,
     DamageBreakdown,
     HitChanceBreakdown,
-    Op,
     Penetration,
     ResistEntry,
     StatBreakdown,
     StatTerm,
-    TBSSession,
-    TermKind,
 )
+from ..models.map import MapGrid
+from ..models.mission import Mission
+from ..models.modifiers import StatModifier
+from ..models.session import TBSSession
+from ..models.units import Unit
 
 Coord = tuple[int, int]
 

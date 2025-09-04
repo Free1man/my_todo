@@ -2,7 +2,7 @@
 import json
 
 import requests
-from backend.models.common import Mission
+from backend.models.mission import Mission
 
 
 # ---------- HTTP helpers (show server error bodies) ----------

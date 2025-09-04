@@ -1,25 +1,21 @@
 # tests/integration/utils/data.py
 from __future__ import annotations
 
-from backend.models.common import (
+from backend.models.enums import (
     GoalKind,
-    Item,
-    MapGrid,
-    Mission,
-    MissionGoal,
     ModifierSource,
     Operation,
     Side,
-    Skill,
     SkillKind,
     SkillTarget,
-    StatBlock,
-    StatModifier,
     StatName,
     Terrain,
-    Tile,
-    Unit,
 )
+from backend.models.map import MapGrid, Tile
+from backend.models.mission import Mission, MissionGoal
+from backend.models.modifiers import StatBlock, StatModifier
+from backend.models.skills import Item, Skill
+from backend.models.units import Unit
 
 # ----- Item Templates -----
 

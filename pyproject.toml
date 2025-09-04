@@ -55,7 +55,8 @@ ignore = ["E501", "E203"]
 [tool.ruff.lint.per-file-ignores]
 # allow re-export patterns
 "**/__init__.py" = ["F401"]
-"backend/models/api.py" = ["TCH"]
+"backend/engine/tbs_engine.py" = ["TC001"]
+"backend/models/api.py" = ["TC001"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true

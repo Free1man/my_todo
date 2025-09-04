@@ -2,7 +2,7 @@ import logging
 import time
 
 import requests
-from backend.models.common import StatName
+from backend.models.enums import StatName
 from tests.integration.utils.data import (
     archer_template,
     goblin_template,

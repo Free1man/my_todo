@@ -5,7 +5,7 @@ import pytest
 import requests
 import requests as _requests
 from backend.models.api import AttackAction
-from backend.models.common import StatName
+from backend.models.enums import StatName
 from tests.integration.utils.data import (
     archer_template,
     goblin_template,

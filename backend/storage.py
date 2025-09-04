@@ -6,7 +6,7 @@ import time
 from pydantic import TypeAdapter
 from redis import Redis
 
-from .models.tbs import TBSSession  # adjust import if needed
+from .models.session import TBSSession  # adjust import if needed
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 MAX_SESSIONS = int(os.getenv("MAX_SESSIONS", "50"))
