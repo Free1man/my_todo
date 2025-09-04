@@ -1,5 +1,5 @@
 # Runtime image
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 # System deps (general build tools and curl for Poetry installer)
 RUN apt-get update && apt-get install -y --no-install-recommends \

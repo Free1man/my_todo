@@ -57,7 +57,9 @@ def _is_healthy(url: str, attempts: int = 3, delay: float = 1.0) -> bool:
             if r.status_code == 200:
                 return True
         except Exception as e:
-            logger.debug("[tests] Health probe failed (attempt %s/%s): %s", i + 1, attempts, e)
+            logger.debug(
+                "[tests] Health probe failed (attempt %s/%s): %s", i + 1, attempts, e
+            )
         time.sleep(delay)
     return False
 
@@ -89,7 +91,11 @@ def base_url() -> Iterator[str]:
         cached_url = cache.get("url")
         ts = float(cache.get("timestamp", 0))
         if cached_url and (now - ts) <= CACHE_TTL_SECONDS:
-            logger.info("[tests] Reusing cached API instance at %s (age=%.1fs)", cached_url, now - ts)
+            logger.info(
+                "[tests] Reusing cached API instance at %s (age=%.1fs)",
+                cached_url,
+                now - ts,
+            )
             if _is_healthy(cached_url):
                 yield cached_url
                 return
@@ -98,13 +104,19 @@ def base_url() -> Iterator[str]:
 
     # Start or refresh the Docker Compose stack
     # Stop existing stack if any, to allow port remap and rebuild
-    subprocess.run(["docker", "compose", "stop", "api", "redis"], cwd=str(PROJECT_ROOT), check=False)
+    subprocess.run(
+        ["docker", "compose", "stop", "api", "redis"],
+        cwd=str(PROJECT_ROOT),
+        check=False,
+    )
 
     port = _get_free_port()
     env = os.environ.copy()
     env["PORT"] = str(port)
     up_cmd = ["docker", "compose", "up", "-d", "--build", "--wait"]
-    logger.info("[tests] Starting docker compose on PORT=%s: %s", port, " ".join(up_cmd))
+    logger.info(
+        "[tests] Starting docker compose on PORT=%s: %s", port, " ".join(up_cmd)
+    )
     up_proc = subprocess.run(
         up_cmd,
         cwd=str(PROJECT_ROOT),
@@ -125,7 +137,9 @@ def base_url() -> Iterator[str]:
             response = requests.get(f"{url}/health", timeout=5)
             if response.status_code == 200:
                 health_data = response.json()
-                logger.info(f"[tests] Health check passed (attempt {attempt + 1}): {health_data}")
+                logger.info(
+                    f"[tests] Health check passed (attempt {attempt + 1}): {health_data}"
+                )
                 break
         except Exception as e:
             logger.debug(f"[tests] Health check attempt {attempt + 1} failed: {e}")

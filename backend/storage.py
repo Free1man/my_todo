@@ -1,5 +1,6 @@
 from __future__ import annotations
-import os, time
+import os
+import time
 from typing import Optional, List
 from redis import Redis
 from pydantic import TypeAdapter
@@ -13,12 +14,15 @@ r = Redis.from_url(REDIS_URL, decode_responses=True)
 
 INDEX = "sess:index"  # sorted-set: member=sid, score=last touch (unix seconds)
 
+
 def _k(sid: str) -> str:
     return f"sess:{sid}"
+
 
 def _touch(sid: str) -> None:
     # update "last used" timestamp
     r.zadd(INDEX, {sid: time.time()})
+
 
 def _enforce_cap() -> None:
     # if over cap, evict the least-recently-used sessions
@@ -35,12 +39,14 @@ def _enforce_cap() -> None:
         pipe.delete(_k(sid))
     pipe.execute()
 
+
 def save(sess: TBSSession) -> None:
     # write payload
     r.set(_k(sess.id), sess.model_dump_json())
     # index/update recency and enforce cap
     _touch(sess.id)
     _enforce_cap()
+
 
 def get(sid: str) -> Optional[TBSSession]:
     raw = r.get(_k(sid))
@@ -49,9 +55,10 @@ def get(sid: str) -> Optional[TBSSession]:
         r.zrem(INDEX, sid)
         return None
     if EVICT_ON_GET:
-        _touch(sid)         # makes policy LRU
-        _enforce_cap()      # optional; cheap and keeps things tidy
+        _touch(sid)  # makes policy LRU
+        _enforce_cap()  # optional; cheap and keeps things tidy
     return TypeAdapter(TBSSession).validate_json(raw)
+
 
 def delete(sid: str) -> bool:
     pipe = r.pipeline()
@@ -60,6 +67,7 @@ def delete(sid: str) -> bool:
     res = pipe.execute()
     # res[0] is DEL result (0/1)
     return bool(res and res[0])
+
 
 def list_all() -> List[TBSSession]:
     sids = r.zrevrange(INDEX, 0, -1)
@@ -73,7 +81,7 @@ def list_all() -> List[TBSSession]:
             sessions.append(TypeAdapter(TBSSession).validate_json(raw))
         else:
             stale_sids.append(sids[i])
-    
+
     if stale_sids:
         r.zrem(INDEX, *stale_sids)
 

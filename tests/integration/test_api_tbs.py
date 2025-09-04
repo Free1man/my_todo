@@ -28,8 +28,8 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
 
     # 2. Customize units for the test
     attacker.pos = (1, 1)
-    attacker.stats.base[StatName.ATK] = 5 # Override base attack
-    attacker.items = [] # No items for this test
+    attacker.stats.base[StatName.ATK] = 5  # Override base attack
+    attacker.items = []  # No items for this test
 
     target.pos = (1, 2)
     target.stats.base[StatName.HP] = 10
@@ -50,15 +50,22 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
     assert ex.get("legal"), f"expected legal attack, got {ex}"
 
     # Explainable evaluation via legal_actions?explain=true
-    la = _requests.get(f"{base_url}/sessions/{sid}/legal_actions", params={"explain": "true"}, timeout=5)
+    la = _requests.get(
+        f"{base_url}/sessions/{sid}/legal_actions",
+        params={"explain": "true"},
+        timeout=5,
+    )
     la.raise_for_status()
     acts = la.json()["actions"]
     # find our attack action entry
     evj = next(
-        (a.get("evaluation") for a in acts
-         if a.get("action", {}).get("kind") == "ATTACK"
-         and a.get("action", {}).get("attacker_id") == attacker.id
-         and a.get("action", {}).get("target_id") == target.id),
+        (
+            a.get("evaluation")
+            for a in acts
+            if a.get("action", {}).get("kind") == "ATTACK"
+            and a.get("action", {}).get("attacker_id") == attacker.id
+            and a.get("action", {}).get("target_id") == target.id
+        ),
         None,
     )
     assert evj is not None, f"expected evaluation for ATTACK {attacker.id}->{target.id}"
@@ -73,10 +80,13 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
     # 5. Confirm damage
     expected_damage = 5
     actual = hp_before - hp_after
-    assert actual == expected_damage, f"Expected {expected_damage} damage, but got {actual}"
+    assert (
+        actual == expected_damage
+    ), f"Expected {expected_damage} damage, but got {actual}"
     # Expected damage preview should be within the min..max range and close to actual (same in this simple model)
     assert evj["min_damage"] <= evj["expected_damage"] <= evj["max_damage"]
     assert int(evj["expected_damage"]) == actual
+
 
 def test_melee_out_of_range_attack_rejected(base_url: str):
     # 1. Setup units
@@ -85,7 +95,7 @@ def test_melee_out_of_range_attack_rejected(base_url: str):
 
     # 2. Customize
     attacker.pos = (0, 0)
-    target.pos = (2, 2) # Out of default range 1
+    target.pos = (2, 2)  # Out of default range 1
 
     # 3. Create mission
     mission = simple_mission([attacker, target])
@@ -103,6 +113,7 @@ def test_melee_out_of_range_attack_rejected(base_url: str):
     with pytest.raises(requests.HTTPError):
         _apply(base_url, sid, atk_payload)
 
+
 def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     # 1. Setup units
     melee_unit = hero_template()
@@ -110,11 +121,11 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
 
     # 2. Customize and assign items
     melee_unit.pos = (0, 0)
-    melee_unit.items = [] # No items
+    melee_unit.items = []  # No items
     melee_unit.stats.base[StatName.INIT] = 100
 
     ranged_unit.pos = (0, 2)
-    ranged_unit.items = [short_bow_template()] 
+    ranged_unit.items = [short_bow_template()]
     ranged_unit.stats.base[StatName.ATK] = 4
 
     # 3. Create mission
@@ -132,7 +143,7 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     # 6. End turn for melee unit to pass turn to the ranged unit
     end_turn_action = {"kind": "END_TURN"}
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess['mission']['current_unit_id'] == ranged_unit.id
+    assert sess["mission"]["current_unit_id"] == ranged_unit.id
 
     # 7. Ranged should succeed
     atk_ok_action = AttackAction(attacker_id=ranged_unit.id, target_id=melee_unit.id)
@@ -142,14 +153,21 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
 
     hp_before = _hp_of(sess, melee_unit.id)
     # Check explainable evaluation via legal_actions
-    la = _requests.get(f"{base_url}/sessions/{sid}/legal_actions", params={"explain": "true"}, timeout=5)
+    la = _requests.get(
+        f"{base_url}/sessions/{sid}/legal_actions",
+        params={"explain": "true"},
+        timeout=5,
+    )
     la.raise_for_status()
     acts = la.json()["actions"]
     evj = next(
-        (a.get("evaluation") for a in acts
-         if a.get("action", {}).get("kind") == "ATTACK"
-         and a.get("action", {}).get("attacker_id") == ranged_unit.id
-         and a.get("action", {}).get("target_id") == melee_unit.id),
+        (
+            a.get("evaluation")
+            for a in acts
+            if a.get("action", {}).get("kind") == "ATTACK"
+            and a.get("action", {}).get("attacker_id") == ranged_unit.id
+            and a.get("action", {}).get("target_id") == melee_unit.id
+        ),
         None,
     )
     assert evj is not None
@@ -163,6 +181,7 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     actual = hp_before - hp_after
     assert actual == 3, f"expected 3 damage, got {actual}"
     assert int(evj["expected_damage"]) == actual
+
 
 def test_initiative_and_turn_order(base_url: str):
     # 1. Setup units with different initiative scores
@@ -184,21 +203,21 @@ def test_initiative_and_turn_order(base_url: str):
     # 3. Create session and check initial state
     # Engine should sort by INIT: fast, mid, slow
     sid, sess = _create_tbs_session(base_url, mission)
-    assert sess['mission']['turn'] == 1
-    assert sess['mission']['current_unit_id'] == "unit_fast"
+    assert sess["mission"]["turn"] == 1
+    assert sess["mission"]["current_unit_id"] == "unit_fast"
 
     # 4. End turn 1 (fast -> mid)
     end_turn_action = {"kind": "END_TURN"}
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess['mission']['turn'] == 1
-    assert sess['mission']['current_unit_id'] == "unit_mid"
+    assert sess["mission"]["turn"] == 1
+    assert sess["mission"]["current_unit_id"] == "unit_mid"
 
     # 5. End turn 2 (mid -> slow)
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess['mission']['turn'] == 1
-    assert sess['mission']['current_unit_id'] == "unit_slow"
+    assert sess["mission"]["turn"] == 1
+    assert sess["mission"]["current_unit_id"] == "unit_slow"
 
     # 6. End turn 3 (slow -> fast, wraps around to a new turn)
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess['mission']['turn'] == 2
-    assert sess['mission']['current_unit_id'] == "unit_fast"
+    assert sess["mission"]["turn"] == 2
+    assert sess["mission"]["current_unit_id"] == "unit_fast"

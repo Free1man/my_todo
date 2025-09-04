@@ -7,7 +7,18 @@ from typing import Dict, List, Optional, Tuple
 import pytest
 import requests
 
-from backend.models.common import GoalKind, MapGrid, Mission, MissionGoal, Side, StatBlock, StatName, Terrain, Tile, Unit
+from backend.models.common import (
+    GoalKind,
+    MapGrid,
+    Mission,
+    MissionGoal,
+    Side,
+    StatBlock,
+    StatName,
+    Terrain,
+    Tile,
+    Unit,
+)
 from tests.integration.utils.helpers import _create_tbs_session
 
 
@@ -16,7 +27,11 @@ logger = logging.getLogger(__name__)
 
 
 def _make_plain_map(w: int, h: int) -> MapGrid:
-    return MapGrid(width=w, height=h, tiles=[[Tile(terrain=Terrain.PLAIN) for _ in range(w)] for _ in range(h)])
+    return MapGrid(
+        width=w,
+        height=h,
+        tiles=[[Tile(terrain=Terrain.PLAIN) for _ in range(w)] for _ in range(h)],
+    )
 
 
 def _make_unit(uid: str, name: str, side: Side, pos: Coord, init: int) -> Unit:
@@ -30,10 +45,14 @@ def _make_unit(uid: str, name: str, side: Side, pos: Coord, init: int) -> Unit:
         StatName.CRIT: 0,
         StatName.INIT: init,
     }
-    return Unit(id=uid, name=name, side=side, pos=pos, stats=StatBlock(base=base), ap_left=2)
+    return Unit(
+        id=uid, name=name, side=side, pos=pos, stats=StatBlock(base=base), ap_left=2
+    )
 
 
-def _spawn_line(side: Side, count: int, x: int, h: int, spacing: int = 9, init_base: int = 12) -> List[Unit]:
+def _spawn_line(
+    side: Side, count: int, x: int, h: int, spacing: int = 9, init_base: int = 12
+) -> List[Unit]:
     units: List[Unit] = []
     ys = list(range(5, h - 5, spacing))[:count]
     for i, y in enumerate(ys):
@@ -118,8 +137,12 @@ def _choose_move_destination(sess_json: dict, target: Coord) -> Optional[Coord]:
     return None
 
 
-def _apply_with_session(http: requests.Session, base_url: str, sid: str, payload: dict) -> dict:
-    r = http.post(f"{base_url}/sessions/{sid}/action", json={"action": payload}, timeout=30)
+def _apply_with_session(
+    http: requests.Session, base_url: str, sid: str, payload: dict
+) -> dict:
+    r = http.post(
+        f"{base_url}/sessions/{sid}/action", json={"action": payload}, timeout=30
+    )
     if r.status_code >= 400:
         try:
             body = r.json()
@@ -137,6 +160,7 @@ def _apply_with_session(http: requests.Session, base_url: str, sid: str, payload
     g = http.get(f"{base_url}/sessions/{sid}", timeout=30)
     g.raise_for_status()
     return g.json()
+
 
 @pytest.mark.skip
 def test_mass_battle_100x100_10v10_until_victory(base_url: str):
@@ -174,19 +198,30 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
             continue
 
         # find closest enemy
-        foes = [(oid, tuple(u["pos"])) for oid, u in units.items() if u.get("alive", True) and u["side"] != me["side"]]
+        foes = [
+            (oid, tuple(u["pos"]))
+            for oid, u in units.items()
+            if u.get("alive", True) and u["side"] != me["side"]
+        ]
         if not foes:
             break
         me_pos = tuple(me["pos"])  # type: ignore
         # choose nearest by Manhattan (tie by unit id for determinism)
-        target_id, target_pos = min(foes, key=lambda t: (_manhattan(me_pos, t[1]), t[0]))
+        target_id, target_pos = min(
+            foes, key=lambda t: (_manhattan(me_pos, t[1]), t[0])
+        )
         rng = int(me["stats"]["base"]["RNG"])  # base RNG is 1 in this setup
         dist = _manhattan(me_pos, target_pos)
 
         # Try ATTACK if in range
         if dist <= rng:
             try:
-                sess = _apply_with_session(http, base_url, sid, {"kind": "ATTACK", "attacker_id": uid, "target_id": target_id})
+                sess = _apply_with_session(
+                    http,
+                    base_url,
+                    sid,
+                    {"kind": "ATTACK", "attacker_id": uid, "target_id": target_id},
+                )
             except requests.HTTPError:
                 # likely no AP or attacker cannot act; end turn
                 sess = _apply_with_session(http, base_url, sid, {"kind": "END_TURN"})
@@ -197,7 +232,12 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
         dest = _choose_move_destination(sess, target_pos)
         if dest is not None:
             try:
-                sess = _apply_with_session(http, base_url, sid, {"kind": "MOVE", "unit_id": uid, "to": list(dest)})
+                sess = _apply_with_session(
+                    http,
+                    base_url,
+                    sid,
+                    {"kind": "MOVE", "unit_id": uid, "to": list(dest)},
+                )
             except requests.HTTPError:
                 # fallback to end turn if move rejected
                 sess = _apply_with_session(http, base_url, sid, {"kind": "END_TURN"})
@@ -210,10 +250,16 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
 
     # 3) Assertions — we should end in victory or defeat within the step budget
     status = sess["mission"]["status"]
-    assert status in ("VICTORY", "DEFEAT"), f"Battle did not conclude in {max_steps} steps; status={status}"
+    assert status in (
+        "VICTORY",
+        "DEFEAT",
+    ), f"Battle did not conclude in {max_steps} steps; status={status}"
     # Log final state
     p, e = _alive_counts(sess)
     logger.info(
         "[mass] Final: status=%s, turn=%s, %s alive vs %s alive",
-        sess["mission"]["status"], sess["mission"]["turn"], p, e,
+        sess["mission"]["status"],
+        sess["mission"]["turn"],
+        p,
+        e,
     )

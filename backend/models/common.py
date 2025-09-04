@@ -5,10 +5,12 @@ from pydantic import BaseModel, Field
 
 Coord = Tuple[int, int]  # (x, y)
 
+
 class Side(str, Enum):
     PLAYER = "PLAYER"
     ENEMY = "ENEMY"
     NEUTRAL = "NEUTRAL"
+
 
 class Terrain(str, Enum):
     PLAIN = "PLAIN"
@@ -16,6 +18,7 @@ class Terrain(str, Enum):
     HILL = "HILL"
     WATER = "WATER"
     BLOCKED = "BLOCKED"
+
 
 class StatName(str, Enum):
     HP = "HP"
@@ -27,6 +30,7 @@ class StatName(str, Enum):
     CRIT = "CRIT"
     INIT = "INIT"
 
+
 class Operation(str, Enum):
     """
     How a modifier changes a stat:
@@ -34,9 +38,11 @@ class Operation(str, Enum):
     - MULTIPLICATIVE: scale as percentage (final = base * (1 + value/100))
     - OVERRIDE: replace base with exact value (final = value)
     """
+
     ADDITIVE = "ADDITIVE"
     MULTIPLICATIVE = "MULTIPLICATIVE"
     OVERRIDE = "OVERRIDE"
+
 
 class ModifierSource(str, Enum):
     ITEM = "ITEM"
@@ -46,6 +52,7 @@ class ModifierSource(str, Enum):
     SKILL = "SKILL"
     GLOBAL = "GLOBAL"
 
+
 class StatModifier(BaseModel):
     stat: StatName
     operation: Operation
@@ -54,12 +61,15 @@ class StatModifier(BaseModel):
     tag: Optional[str] = None
     duration_turns: Optional[int] = None  # None = persistent while source exists
 
+
 class StatBlock(BaseModel):
     base: Dict[StatName, int] = Field(default_factory=dict)
+
 
 class SkillKind(str, Enum):
     PASSIVE = "PASSIVE"
     ACTIVE = "ACTIVE"
+
 
 class SkillTarget(str, Enum):
     SELF = "SELF"
@@ -67,6 +77,7 @@ class SkillTarget(str, Enum):
     ALLY_UNIT = "ALLY_UNIT"
     TILE = "TILE"
     NONE = "NONE"
+
 
 class Skill(BaseModel):
     id: str
@@ -80,15 +91,18 @@ class Skill(BaseModel):
     apply_mods: List[StatModifier] = Field(default_factory=list)
     passive_mods: List[StatModifier] = Field(default_factory=list)
 
+
 class Item(BaseModel):
     id: str = "item.example"
     name: str = "Item"
     mods: List[StatModifier] = Field(default_factory=list)
 
+
 class Injury(BaseModel):
     id: str
     name: str
     mods: List[StatModifier] = Field(default_factory=list)
+
 
 class Aura(BaseModel):
     id: str
@@ -97,39 +111,49 @@ class Aura(BaseModel):
     mods: List[StatModifier] = Field(default_factory=list)
     owner_unit_id: Optional[str] = None
 
+
 class Tile(BaseModel):
     terrain: Terrain = Terrain.PLAIN
     mods: List[StatModifier] = Field(default_factory=list)
+
     @property
     def walkable(self) -> bool:
         return self.terrain not in (Terrain.BLOCKED, Terrain.WATER)
+
 
 class MapGrid(BaseModel):
     width: int
     height: int
     tiles: List[List[Tile]]  # tiles[y][x]
+
     def in_bounds(self, c: Coord) -> bool:
         x, y = c
         return 0 <= x < self.width and 0 <= y < self.height
+
     def tile(self, c: Coord) -> Tile:
         x, y = c
         return self.tiles[y][x]
+
 
 class Unit(BaseModel):
     id: str = "unit.example"
     side: Side = Side.PLAYER
     name: str = "Unit"
     pos: Coord = (0, 0)
-    stats: StatBlock = Field(default_factory=lambda: StatBlock(base={
-        StatName.HP: 10,
-        StatName.AP: 2,
-        StatName.ATK: 3,
-        StatName.DEF: 1,
-        StatName.MOV: 4,
-        StatName.RNG: 1,
-        StatName.CRIT: 5,
-        StatName.INIT: 10,
-    }))
+    stats: StatBlock = Field(
+        default_factory=lambda: StatBlock(
+            base={
+                StatName.HP: 10,
+                StatName.AP: 2,
+                StatName.ATK: 3,
+                StatName.DEF: 1,
+                StatName.MOV: 4,
+                StatName.RNG: 1,
+                StatName.CRIT: 5,
+                StatName.INIT: 10,
+            }
+        )
+    )
     items: List[Item] = Field(default_factory=list)
     injuries: List[Injury] = Field(default_factory=list)
     auras: List[Aura] = Field(default_factory=list)
@@ -140,9 +164,11 @@ class Unit(BaseModel):
     skill_cooldowns: Dict[str, int] = Field(default_factory=dict)
     skill_charges: Dict[str, int] = Field(default_factory=dict)
 
+
 class GoalKind(str, Enum):
     ELIMINATE_ALL_ENEMIES = "ELIMINATE_ALL_ENEMIES"
     SURVIVE_TURNS = "SURVIVE_TURNS"
+
 
 class MissionGoal(BaseModel):
     kind: GoalKind
@@ -158,6 +184,7 @@ class MissionStatus(str, Enum):
 class MissionEvent(BaseModel):
     id: str
     text: str
+
 
 class Mission(BaseModel):
     id: str

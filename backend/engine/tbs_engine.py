@@ -1,16 +1,29 @@
 from __future__ import annotations
 from typing import List, Optional, Set, Tuple
-import random
 from pydantic import BaseModel
 
 from ..models.api import (
-    Action, MoveAction, AttackAction, UseSkillAction, EndTurnAction,
-    EvaluateResponse, LegalAction, LegalActionsResponse
+    Action,
+    MoveAction,
+    AttackAction,
+    UseSkillAction,
+    EndTurnAction,
+    EvaluateResponse,
+    LegalAction,
+    LegalActionsResponse,
 )
 from ..models.common import (
     GoalKind,
-    MapGrid, Mission, MissionStatus, Operation, Side, Skill, SkillTarget,
-    StatModifier, StatName, Tile, Unit, ModifierSource
+    MapGrid,
+    Mission,
+    MissionStatus,
+    Operation,
+    Side,
+    SkillTarget,
+    StatModifier,
+    StatName,
+    Unit,
+    ModifierSource,
 )
 from ..models.tbs import (
     TBSSession,
@@ -26,6 +39,7 @@ from ..models.tbs import (
 )
 
 Coord = Tuple[int, int]
+
 
 class TBSEngine:
     # ---------- Public API ----------
@@ -59,11 +73,16 @@ class TBSEngine:
             if skill.cooldown > 0:
                 u.skill_cooldowns[skill.id] = skill.cooldown + 1
             if skill.charges is not None:
-                u.skill_charges[skill.id] = max(0, u.skill_charges.get(skill.id, skill.charges) - 1)
+                u.skill_charges[skill.id] = max(
+                    0, u.skill_charges.get(skill.id, skill.charges) - 1
+                )
             if skill.apply_mods:
                 # Determine the unit that will receive the skill's effects
                 target_unit = u
-                if skill.target in (SkillTarget.ALLY_UNIT, SkillTarget.ENEMY_UNIT) and action.target_unit_id:
+                if (
+                    skill.target in (SkillTarget.ALLY_UNIT, SkillTarget.ENEMY_UNIT)
+                    and action.target_unit_id
+                ):
                     target_unit = mission.units[action.target_unit_id]
 
                 # Split HP-direct effects vs. temporary modifiers
@@ -109,7 +128,9 @@ class TBSEngine:
 
         return TBSSession(id=sess.id, mission=mission)
 
-    def list_legal_actions(self, sess: TBSSession, *, explain: bool = False) -> LegalActionsResponse:
+    def list_legal_actions(
+        self, sess: TBSSession, *, explain: bool = False
+    ) -> LegalActionsResponse:
         """
         Enumerate all legal actions for the side-to-move and return them
         pre-evaluated with explanations (so clients do not spam /evaluate).
@@ -152,8 +173,16 @@ class TBSEngine:
                     act = AttackAction(attacker_id=u.id, target_id=other.id)
                     ok, why = self._evaluate_action(m, act)
                     if ok:
-                        evaluation = self.evaluate_attack(m, act.attacker_id, act.target_id) if explain else None
-                        out.append(LegalAction(action=act, explanation=why, evaluation=evaluation))
+                        evaluation = (
+                            self.evaluate_attack(m, act.attacker_id, act.target_id)
+                            if explain
+                            else None
+                        )
+                        out.append(
+                            LegalAction(
+                                action=act, explanation=why, evaluation=evaluation
+                            )
+                        )
 
             # SKILLS
             for s in u.skills:
@@ -176,7 +205,9 @@ class TBSEngine:
                         if not ally.alive or ally.side != u.side:
                             continue
                         if manhattan(u.pos, ally.pos) <= s.range:
-                            act = UseSkillAction(unit_id=u.id, skill_id=s.id, target_unit_id=ally.id)
+                            act = UseSkillAction(
+                                unit_id=u.id, skill_id=s.id, target_unit_id=ally.id
+                            )
                             ok, why = self._evaluate_action(m, act)
                             if ok:
                                 out.append(LegalAction(action=act, explanation=why))
@@ -186,7 +217,9 @@ class TBSEngine:
                         if not foe.alive or foe.side == u.side:
                             continue
                         if manhattan(u.pos, foe.pos) <= s.range:
-                            act = UseSkillAction(unit_id=u.id, skill_id=s.id, target_unit_id=foe.id)
+                            act = UseSkillAction(
+                                unit_id=u.id, skill_id=s.id, target_unit_id=foe.id
+                            )
                             ok, why = self._evaluate_action(m, act)
                             if ok:
                                 out.append(LegalAction(action=act, explanation=why))
@@ -216,7 +249,9 @@ class TBSEngine:
         # GLOBAL or unknown
         return TermKind.CONTEXT
 
-    def _eff_stat_with_trace(self, mission: Mission, u: Unit, stat: StatName) -> "TBSEngine.EffStat":
+    def _eff_stat_with_trace(
+        self, mission: Mission, u: Unit, stat: StatName
+    ) -> "TBSEngine.EffStat":
         base_val = u.stats.base.get(stat, 0)
 
         # Collect modifiers exactly like _eff_stat
@@ -252,20 +287,47 @@ class TBSEngine:
             kind = self._map_source_to_kind(m.source)
             if m.operation == Operation.ADDITIVE:
                 add_flat += m.value
-                terms.append(StatTerm(kind=kind, source=m.source.value if m.source else "context", op=Op.FLAT, value=float(m.value)))
+                terms.append(
+                    StatTerm(
+                        kind=kind,
+                        source=m.source.value if m.source else "context",
+                        op=Op.FLAT,
+                        value=float(m.value),
+                    )
+                )
             elif m.operation == Operation.MULTIPLICATIVE:
-                mul *= (1.0 + (m.value / 100.0))
-                terms.append(StatTerm(kind=kind, source=m.source.value if m.source else "context", op=Op.MULT, value=float(m.value) / 100.0))
+                mul *= 1.0 + (m.value / 100.0)
+                terms.append(
+                    StatTerm(
+                        kind=kind,
+                        source=m.source.value if m.source else "context",
+                        op=Op.MULT,
+                        value=float(m.value) / 100.0,
+                    )
+                )
             elif m.operation == Operation.OVERRIDE:
                 override = m.value
                 # Represent override as a flat delta for transparency
                 delta = float(m.value - base_val)
-                terms.append(StatTerm(kind=kind, source=m.source.value if m.source else "context", op=Op.FLAT, value=delta, note="override"))
+                terms.append(
+                    StatTerm(
+                        kind=kind,
+                        source=m.source.value if m.source else "context",
+                        op=Op.FLAT,
+                        value=delta,
+                        note="override",
+                    )
+                )
 
-        base_applied = (override if override is not None else base_val)
+        base_applied = override if override is not None else base_val
         result = max(int(base_applied * mul) + add_flat, 0)
 
-        bd = StatBreakdown(name=stat.value.lower(), base=float(base_val), terms=terms, result=float(result))
+        bd = StatBreakdown(
+            name=stat.value.lower(),
+            base=float(base_val),
+            terms=terms,
+            result=float(result),
+        )
         return TBSEngine.EffStat(value=float(result), breakdown=bd)
 
     # ---- Public initializer (use this from app.py) ----
@@ -279,7 +341,9 @@ class TBSEngine:
         # Record each unit's initial max HP in tags for healing caps
         for _u in mission.units.values():
             try:
-                if not any(isinstance(t, str) and t.startswith("MAX_HP=") for t in _u.tags):
+                if not any(
+                    isinstance(t, str) and t.startswith("MAX_HP=") for t in _u.tags
+                ):
                     base_hp = _u.stats.base.get(StatName.HP, 0)
                     _u.tags.append(f"MAX_HP={base_hp}")
             except Exception:
@@ -287,9 +351,13 @@ class TBSEngine:
         # If a cursor was provided, rotate order to start there (if alive and present)
         if requested_cursor and requested_cursor in mission.initiative_order:
             idx = mission.initiative_order.index(requested_cursor)
-            mission.initiative_order = mission.initiative_order[idx:] + mission.initiative_order[:idx]
+            mission.initiative_order = (
+                mission.initiative_order[idx:] + mission.initiative_order[:idx]
+            )
         # Set current to first in order
-        mission.current_unit_id = mission.initiative_order[0] if mission.initiative_order else None
+        mission.current_unit_id = (
+            mission.initiative_order[0] if mission.initiative_order else None
+        )
         # Prime AP for the current unit if alive
         if mission.current_unit_id:
             u = mission.units.get(mission.current_unit_id)
@@ -310,7 +378,10 @@ class TBSEngine:
             return (True, "ok") if path_ok else (False, "cannot reach")
 
         if isinstance(action, AttackAction):
-            if action.attacker_id not in mission.units or action.target_id not in mission.units:
+            if (
+                action.attacker_id not in mission.units
+                or action.target_id not in mission.units
+            ):
                 return False, "unknown unit(s)"
             atk = mission.units[action.attacker_id]
             tgt = mission.units[action.target_id]
@@ -346,11 +417,17 @@ class TBSEngine:
                 return False, "not enough AP"
             if u.skill_cooldowns.get(skill.id, 0) > 0:
                 return False, "on cooldown"
-            if skill.charges is not None and u.skill_charges.get(skill.id, skill.charges) <= 0:
+            if (
+                skill.charges is not None
+                and u.skill_charges.get(skill.id, skill.charges) <= 0
+            ):
                 return False, "no charges"
 
             if skill.target in (SkillTarget.ALLY_UNIT, SkillTarget.ENEMY_UNIT):
-                if not action.target_unit_id or action.target_unit_id not in mission.units:
+                if (
+                    not action.target_unit_id
+                    or action.target_unit_id not in mission.units
+                ):
                     return False, "missing target"
                 target = mission.units[action.target_unit_id]
                 if skill.target == SkillTarget.ALLY_UNIT and target.side != u.side:
@@ -377,8 +454,12 @@ class TBSEngine:
 
     def _neighbors(self, grid: MapGrid, c: Coord) -> List[Coord]:
         x, y = c
-        cand = [(x+1,y), (x-1,y), (x,y+1), (x,y-1)]
-        return [(nx, ny) for nx, ny in cand if 0 <= nx < grid.width and 0 <= ny < grid.height]
+        cand = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+        return [
+            (nx, ny)
+            for nx, ny in cand
+            if 0 <= nx < grid.width and 0 <= ny < grid.height
+        ]
 
     def _occupied(self, mission: Mission, c: Coord) -> bool:
         return any(u.alive and u.pos == c for u in mission.units.values())
@@ -405,7 +486,7 @@ class TBSEngine:
                     continue
                 seen.add(nb)
                 reach.add(nb)
-                frontier.append((nb, d+1))
+                frontier.append((nb, d + 1))
         return reach
 
     def _can_reach(self, mission: Mission, u: Unit, dst: Coord) -> bool:
@@ -424,19 +505,22 @@ class TBSEngine:
                 if m.operation == Operation.ADDITIVE:
                     add += m.value
                 elif m.operation == Operation.MULTIPLICATIVE:
-                    mul *= (1.0 + (m.value / 100.0))
+                    mul *= 1.0 + (m.value / 100.0)
                 elif m.operation == Operation.OVERRIDE:
                     override = m.value
-            base = (cur if override is None else override)
+            base = cur if override is None else override
             return max(int(base * mul) + add, 0)
 
         all_mods: List[StatModifier] = []
         # items & injuries attached to this unit
-        for it in u.items: all_mods.extend(it.mods)
-        for inj in u.injuries: all_mods.extend(inj.mods)
+        for it in u.items:
+            all_mods.extend(it.mods)
+        for inj in u.injuries:
+            all_mods.extend(inj.mods)
 
         # auras attached to self
-        for a in u.auras: all_mods.extend(a.mods)
+        for a in u.auras:
+            all_mods.extend(a.mods)
         # auras emitted by nearby living units within radius
         for other in mission.units.values():
             if not other.alive or other.id == u.id:
@@ -451,7 +535,8 @@ class TBSEngine:
         # tile effects
         all_mods.extend(mission.map.tile(u.pos).mods)
         # passive skills
-        for s in u.skills: all_mods.extend(s.passive_mods)
+        for s in u.skills:
+            all_mods.extend(s.passive_mods)
         # mission/global
         all_mods.extend(mission.global_mods)
 
@@ -465,7 +550,9 @@ class TBSEngine:
         return base * 2 if crit >= 100 else base
 
     # ---------- Explainable attack evaluation ----------
-    def evaluate_attack(self, mission: Mission, attacker_id: str, target_id: str) -> ActionEvaluation:
+    def evaluate_attack(
+        self, mission: Mission, attacker_id: str, target_id: str
+    ) -> ActionEvaluation:
         a = mission.units[attacker_id]
         t = mission.units[target_id]
 
@@ -495,12 +582,18 @@ class TBSEngine:
         block_flat = 0.0
         block_mult = 0.0
         after_block = max(0.0, (final_before_crit + crit_expected) - block_flat)
-        after_block *= (1.0 + block_mult)
+        after_block *= 1.0 + block_mult
 
         immune = False
         min_cap = 1.0
         max_cap = None
-        final_capped = 0.0 if immune else max(min_cap, after_block if max_cap is None else min(after_block, max_cap))
+        final_capped = (
+            0.0
+            if immune
+            else max(
+                min_cap, after_block if max_cap is None else min(after_block, max_cap)
+            )
+        )
 
         dmg_bd = DamageBreakdown(
             damage_type="physical",
@@ -533,7 +626,13 @@ class TBSEngine:
         hit_base = 100.0
         hit_mods: List[StatTerm] = []
         hit_result = 100.0
-        hit_bd = HitChanceBreakdown(accuracy=acc_bd, evasion=eva_bd, base=hit_base, mods=hit_mods, result=hit_result)
+        hit_bd = HitChanceBreakdown(
+            accuracy=acc_bd,
+            evasion=eva_bd,
+            base=hit_base,
+            mods=hit_mods,
+            result=hit_result,
+        )
 
         min_dmg = max(0.0 if immune else 1.0, final_capped * 0.9)
         max_dmg = final_capped * 1.1
@@ -567,7 +666,8 @@ class TBSEngine:
     def _end_turn(self, mission: Mission) -> None:
         # cooldowns and drop mods for all units
         for u in mission.units.values():
-            if not u.alive: continue
+            if not u.alive:
+                continue
             # cooldowns
             for sid in list(u.skill_cooldowns.keys()):
                 u.skill_cooldowns[sid] = max(0, u.skill_cooldowns.get(sid, 0) - 1)
@@ -585,7 +685,7 @@ class TBSEngine:
                     inj.mods = new_mods
                     kept.append(inj)
             u.injuries = kept
-        
+
         # Advance initiative cursor and refill AP for the next living unit
         order = mission.initiative_order or []
         if not order:
@@ -596,10 +696,14 @@ class TBSEngine:
             return
 
         try:
-            idx = order.index(mission.current_unit_id) if mission.current_unit_id in order else -1
+            idx = (
+                order.index(mission.current_unit_id)
+                if mission.current_unit_id in order
+                else -1
+            )
         except ValueError:
             idx = -1
-        
+
         # find next living unit in order
         n = len(order)
         if n == 0:
@@ -644,7 +748,9 @@ class TBSEngine:
 
         for goal in mission.goals:
             if goal.kind == GoalKind.ELIMINATE_ALL_ENEMIES:
-                if not any(u.alive and u.side == Side.ENEMY for u in mission.units.values()):
+                if not any(
+                    u.alive and u.side == Side.ENEMY for u in mission.units.values()
+                ):
                     return MissionStatus.VICTORY
             elif goal.kind == GoalKind.SURVIVE_TURNS:
                 if mission.turn >= (goal.survive_turns or 0):
@@ -656,12 +762,15 @@ class TBSEngine:
 
         return MissionStatus.IN_PROGRESS
 
+
 class InjuryFromMods(BaseModel):
     id: str = "inj.temp"
     name: str = "Temporary Effect"
     mods: List[StatModifier]
+
     def __init__(self, mods: List[StatModifier]):
         super().__init__(mods=mods)
+
 
 def manhattan(a: Coord, b: Coord) -> int:
     return abs(a[0] - b[0]) + abs(a[1] - b[1])

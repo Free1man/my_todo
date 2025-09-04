@@ -1,7 +1,5 @@
 # tests/integration/test_victory_conditions.py
 import json
-import pytest
-import requests
 
 from backend.models.api import AttackAction
 from backend.models.common import GoalKind, MissionGoal, StatName

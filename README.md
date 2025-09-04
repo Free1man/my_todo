@@ -100,4 +100,3 @@ The `/health` endpoint provides:
 - **Games not creating**: Check ruleset registration
 - **Redis issues**: Verify Redis container is running
 - **API errors**: Check logs with `docker compose logs api`
-

@@ -1,8 +1,8 @@
 # tests/integration/utils/helpers.py
 import json
 import requests
-from backend.models.api import AttackAction
-from backend.models.common import Mission, Unit, StatName, MapGrid, Tile, Terrain, Side, GoalKind, MissionGoal
+from backend.models.common import Mission
+
 
 # ---------- HTTP helpers (show server error bodies) ----------
 def _post(url: str, payload: dict, *, timeout=5) -> dict:
@@ -20,23 +20,28 @@ def _post(url: str, payload: dict, *, timeout=5) -> dict:
         )
     return r.json()
 
+
 def _get(url: str, *, timeout=5) -> dict:
     r = requests.get(url, timeout=timeout)
     r.raise_for_status()
     return r.json()
 
+
 def _session_get(base_url: str, sid: str) -> dict:
     return _get(f"{base_url}/sessions/{sid}")
+
 
 # ---------- verify/create helpers ----------
 def _units_by_id(sess_json: dict) -> dict[str, dict]:
     units = sess_json.get("mission", {}).get("units", {})
     return units
 
+
 def _hp_of(sess_json: dict, uid: str) -> int:
     u = _units_by_id(sess_json)[uid]
     # In the new model, stats are nested
     return u["stats"]["base"]["HP"]
+
 
 def _create_tbs_session(base_url: str, mission: Mission) -> tuple[str, dict]:
     """Create a TBS session using a typed Mission object."""
@@ -62,6 +67,7 @@ def _create_tbs_session(base_url: str, mission: Mission) -> tuple[str, dict]:
 
     return sid, sess
 
+
 def _evaluate(base_url: str, sid: str, payload: dict) -> dict:
     """Compatibility wrapper: emulate the old /evaluate by checking legal_actions.
     Returns {legal: bool, explanation: str} for the specific action payload.
@@ -72,18 +78,33 @@ def _evaluate(base_url: str, sid: str, payload: dict) -> dict:
         if a.get("kind") != payload.get("kind"):
             continue
         # match on keys for MOVE and ATTACK (sufficient for tests)
-        if a.get("kind") == "MOVE" and a.get("unit_id") == payload.get("unit_id") and a.get("to") == payload.get("to"):
+        if (
+            a.get("kind") == "MOVE"
+            and a.get("unit_id") == payload.get("unit_id")
+            and a.get("to") == payload.get("to")
+        ):
             return {"legal": True, "explanation": entry.get("explanation", "ok")}
-        if a.get("kind") == "ATTACK" and a.get("attacker_id") == payload.get("attacker_id") and a.get("target_id") == payload.get("target_id"):
+        if (
+            a.get("kind") == "ATTACK"
+            and a.get("attacker_id") == payload.get("attacker_id")
+            and a.get("target_id") == payload.get("target_id")
+        ):
             return {"legal": True, "explanation": entry.get("explanation", "ok")}
-        if a.get("kind") == "USE_SKILL" and a.get("unit_id") == payload.get("unit_id") and a.get("skill_id") == payload.get("skill_id"):
+        if (
+            a.get("kind") == "USE_SKILL"
+            and a.get("unit_id") == payload.get("unit_id")
+            and a.get("skill_id") == payload.get("skill_id")
+        ):
             # If target_unit_id present, it must match
-            if payload.get("target_unit_id") and a.get("target_unit_id") != payload.get("target_unit_id"):
+            if payload.get("target_unit_id") and a.get("target_unit_id") != payload.get(
+                "target_unit_id"
+            ):
                 continue
             return {"legal": True, "explanation": entry.get("explanation", "ok")}
         if a.get("kind") == "END_TURN":
             return {"legal": True, "explanation": entry.get("explanation", "ok")}
     return {"legal": False, "explanation": "not in legal_actions"}
+
 
 def _apply(base_url: str, sid: str, payload: dict) -> dict:
     _post(f"{base_url}/sessions/{sid}/action", {"action": payload})

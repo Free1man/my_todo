@@ -1,6 +1,4 @@
 import json
-import requests
-import pytest
 
 from backend.models.api import AttackAction, UseSkillAction
 from backend.models.common import StatName
@@ -52,7 +50,9 @@ def test_heal_after_enemy_attack(base_url: str):
     # End enemy turn so the player can act
     sess = _apply(base_url, sid, {"kind": "END_TURN"})
     assert sess["mission"]["current_unit_id"] == "player"
-    heal = UseSkillAction(unit_id="player", skill_id="skill.heal.simple", target_unit_id="player")
+    heal = UseSkillAction(
+        unit_id="player", skill_id="skill.heal.simple", target_unit_id="player"
+    )
     heal_payload = json.loads(heal.model_dump_json())
     ex = _evaluate(base_url, sid, heal_payload)
     # evaluate() via legal_actions ignores skills without explain; ensure it's offered
@@ -87,7 +87,9 @@ def test_weaken_enemy_attack_reduces_damage(base_url: str):
     assert sess["mission"]["current_unit_id"] == "player"
 
     # Player casts weaken on enemy
-    weaken = UseSkillAction(unit_id="player", skill_id="skill.debuff.weaken", target_unit_id="enemy")
+    weaken = UseSkillAction(
+        unit_id="player", skill_id="skill.debuff.weaken", target_unit_id="enemy"
+    )
     weaken_payload = json.loads(weaken.model_dump_json())
     ex = _evaluate(base_url, sid, weaken_payload)
     assert ex.get("legal"), ex
@@ -137,9 +139,9 @@ def test_weaken_enemy_attack_reduces_damage(base_url: str):
     dmg_without_debuff = hp2_before - hp2_after
 
     # Ensure debuff reduced damage
-    assert dmg_with_debuff < dmg_without_debuff, (
-        f"expected debuff to reduce damage, got with={dmg_with_debuff}, without={dmg_without_debuff}"
-    )
+    assert (
+        dmg_with_debuff < dmg_without_debuff
+    ), f"expected debuff to reduce damage, got with={dmg_with_debuff}, without={dmg_without_debuff}"
 
     # Advance two turns to let debuff expire on enemy, then enemy attacks again
     # 1) End enemy's current turn -> player's turn
