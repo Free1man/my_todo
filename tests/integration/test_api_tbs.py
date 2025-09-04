@@ -63,7 +63,7 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
         (
             a.get("evaluation")
             for a in acts
-            if a.get("action", {}).get("kind") == "ATTACK"
+            if a.get("action", {}).get("kind") == "attack"
             and a.get("action", {}).get("attacker_id") == attacker.id
             and a.get("action", {}).get("target_id") == target.id
         ),
@@ -142,7 +142,7 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     assert not ex.get("legal", False), f"melee should be out of range, got {ex}"
 
     # 6. End turn for melee unit to pass turn to the ranged unit
-    end_turn_action = {"kind": "END_TURN"}
+    end_turn_action = {"kind": "end_turn"}
     sess = _apply(base_url, sid, end_turn_action)
     assert sess["mission"]["current_unit_id"] == ranged_unit.id
 
@@ -165,7 +165,7 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
         (
             a.get("evaluation")
             for a in acts
-            if a.get("action", {}).get("kind") == "ATTACK"
+            if a.get("action", {}).get("kind") == "attack"
             and a.get("action", {}).get("attacker_id") == ranged_unit.id
             and a.get("action", {}).get("target_id") == melee_unit.id
         ),
@@ -208,7 +208,7 @@ def test_initiative_and_turn_order(base_url: str):
     assert sess["mission"]["current_unit_id"] == "unit_fast"
 
     # 4. End turn 1 (fast -> mid)
-    end_turn_action = {"kind": "END_TURN"}
+    end_turn_action = {"kind": "end_turn"}
     sess = _apply(base_url, sid, end_turn_action)
     assert sess["mission"]["turn"] == 1
     assert sess["mission"]["current_unit_id"] == "unit_mid"

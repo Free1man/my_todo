@@ -4,28 +4,28 @@ Coord = tuple[int, int]  # (x, y)
 
 
 class Side(str, Enum):
-    PLAYER = "PLAYER"
-    ENEMY = "ENEMY"
-    NEUTRAL = "NEUTRAL"
+    PLAYER = "player"
+    ENEMY = "enemy"
+    NEUTRAL = "neutral"
 
 
 class Terrain(str, Enum):
-    PLAIN = "PLAIN"
-    FOREST = "FOREST"
-    HILL = "HILL"
-    WATER = "WATER"
-    BLOCKED = "BLOCKED"
+    PLAIN = "plain"
+    FOREST = "forest"
+    HILL = "hill"
+    WATER = "water"
+    BLOCKED = "blocked"
 
 
 class StatName(str, Enum):
-    HP = "HP"
-    AP = "AP"
-    ATK = "ATK"
-    DEF = "DEF"
-    MOV = "MOV"
-    RNG = "RNG"
-    CRIT = "CRIT"
-    INIT = "INIT"
+    HP = "hp"
+    AP = "ap"
+    ATK = "atk"
+    DEF = "def"
+    MOV = "mov"
+    RNG = "rng"
+    CRIT = "crit"
+    INIT = "init"
 
 
 class Operation(str, Enum):
@@ -36,42 +36,42 @@ class Operation(str, Enum):
     - OVERRIDE: replace base with exact value (final = value)
     """
 
-    ADDITIVE = "ADDITIVE"
-    MULTIPLICATIVE = "MULTIPLICATIVE"
-    OVERRIDE = "OVERRIDE"
+    ADDITIVE = "additive"
+    MULTIPLICATIVE = "multiplicative"
+    OVERRIDE = "override"
 
 
 class ModifierSource(str, Enum):
-    ITEM = "ITEM"
-    AURA = "AURA"
-    MAP = "MAP"
-    INJURY = "INJURY"
-    SKILL = "SKILL"
-    GLOBAL = "GLOBAL"
+    ITEM = "item"
+    AURA = "aura"
+    MAP = "map"
+    INJURY = "injury"
+    SKILL = "skill"
+    GLOBAL = "global"
 
 
 class SkillKind(str, Enum):
-    PASSIVE = "PASSIVE"
-    ACTIVE = "ACTIVE"
+    PASSIVE = "passive"
+    ACTIVE = "active"
 
 
 class SkillTarget(str, Enum):
-    SELF = "SELF"
-    ENEMY_UNIT = "ENEMY_UNIT"
-    ALLY_UNIT = "ALLY_UNIT"
-    TILE = "TILE"
-    NONE = "NONE"
+    SELF = "self"
+    ENEMY_UNIT = "enemy_unit"
+    ALLY_UNIT = "ally_unit"
+    TILE = "tile"
+    NONE = "none"
 
 
 class GoalKind(str, Enum):
-    ELIMINATE_ALL_ENEMIES = "ELIMINATE_ALL_ENEMIES"
-    SURVIVE_TURNS = "SURVIVE_TURNS"
+    ELIMINATE_ALL_ENEMIES = "eliminate_all_enemies"
+    SURVIVE_TURNS = "survive_turns"
 
 
 class MissionStatus(str, Enum):
-    IN_PROGRESS = "IN_PROGRESS"
-    VICTORY = "VICTORY"
-    DEFEAT = "DEFEAT"
+    IN_PROGRESS = "in_progress"
+    VICTORY = "victory"
+    DEFEAT = "defeat"
 
 
 class TermKind(str, Enum):
@@ -101,7 +101,7 @@ class ActionType(str, Enum):
 
 
 class ActionKind(str, Enum):
-    MOVE = "MOVE"
-    ATTACK = "ATTACK"
-    USE_SKILL = "USE_SKILL"
-    END_TURN = "END_TURN"
+    MOVE = "move"
+    ATTACK = "attack"
+    USE_SKILL = "use_skill"
+    end_turn = "end_turn"

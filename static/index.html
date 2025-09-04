@@ -35,24 +35,24 @@
       position: relative;
     }
 
-    .WATER {
+  .water {
       background: #7ec8e3;
     }
 
-    .BLOCKED {
+  .blocked {
       background: #666;
       color: #fff;
     }
 
-    .PLAIN {
+  .plain {
       background: #f5f5f5;
     }
 
-    .FOREST {
+  .forest {
       background: #8bc34a;
     }
 
-    .HILL {
+  .hill {
       background: #ff9800;
     }
 
@@ -102,17 +102,17 @@
       z-index: 1;
     }
 
-    .PLAYER {
+  .player {
       background: #4caf50;
       color: #fff;
     }
 
-    .ENEMY {
+  .enemy {
       background: #7e57c2;
       color: #fff;
     }
 
-    .NEUTRAL {
+  .neutral {
       background: #9e9e9e;
       color: #fff;
     }
@@ -390,8 +390,8 @@
     const tileKey = (x, y) => `${x},${y}`;
     const manh = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
     const inBounds = (x, y) => STATE && 0 <= x && x < STATE.map.width && 0 <= y && y < STATE.map.height;
-    const terrainAt = (x, y) => STATE.map.tiles[y][x]?.terrain || 'PLAIN';
-    const isWalkable = (x, y) => { const t = terrainAt(x, y); return !(t === 'BLOCKED' || t === 'WATER'); };
+  const terrainAt = (x, y) => (STATE.map.tiles[y][x]?.terrain || 'plain').toLowerCase();
+  const isWalkable = (x, y) => { const t = terrainAt(x, y); return !(t === 'blocked' || t === 'water'); };
     const isOccupied = (x, y) => Object.values(STATE.units).some(u => u.alive && u.pos[0] === x && u.pos[1] === y);
     const neighbors = (x, y) => [[x+1,y],[x-1,y],[x,y+1],[x,y-1]].filter(([nx, ny]) => inBounds(nx, ny));
     const clearHints = () => { MOVE_HINTS.clear(); ATTACK_HINTS.clear(); };
@@ -593,7 +593,7 @@
       const itemsHtml = items.length ? items.map(it => `<span class="chip" title="${esc(itemTitle(it))}">${esc((it && it.name) || 'Item')}</span>`).join('') : '<span style="color:#777;">None</span>';
       const skillsHtml = skills.length ? skills.map(s => `<span class="chip" title="${(s && s.name) || 'Skill'}">${(s && s.name) || 'Skill'}</span>`).join('') : '<span style="color:#777;">None</span>';
       // Build possible attacks for current unit from LEGAL_ACTIONS (with explain summaries)
-      const attackEntries = (LEGAL_ACTIONS || []).filter(e => e?.action?.kind === 'ATTACK' && e.action.attacker_id === u.id);
+  const attackEntries = (LEGAL_ACTIONS || []).filter(e => e?.action?.kind === 'attack' && e.action.attacker_id === u.id);
       const attacksHtml = attackEntries.length ? attackEntries.map(e => {
         const tgt = STATE.units[e.action.target_id];
         const name = tgt ? `${tgt.name} (${tgt.side})` : e.action.target_id;
@@ -629,7 +629,7 @@
           const attacker = btn.getAttribute('data-att');
           const target = btn.getAttribute('data-tgt');
           if (!attacker || !target) return;
-          await attemptAction({ kind: 'ATTACK', attacker_id: attacker, target_id: target });
+          await attemptAction({ kind: 'attack', attacker_id: attacker, target_id: target });
         };
       });
     }
@@ -783,7 +783,7 @@
       if (!SID) return;
       try {
         log('Ending turn...');
-        const action = { kind: 'END_TURN' };
+  const action = { kind: 'end_turn' };
         const res = await api(`/sessions/${SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
   STATE = res.session.mission;
   // select strictly the acting unit
@@ -814,7 +814,7 @@
         for (let x = 0; x < w; x++) {
           const t = STATE.map.tiles[y][x];
           const div = document.createElement('div');
-          div.className = 'tile ' + (t.terrain || 'PLAIN');
+          div.className = 'tile ' + String(t.terrain || 'plain').toLowerCase();
           div.dataset.x = x;
           div.dataset.y = y;
           g.appendChild(div);
@@ -828,9 +828,9 @@
         if (!d) return;
 
         const dot = document.createElement('div');
-        dot.className = 'u ' + u.side + (u.alive ? '' : ' dead');
+  dot.className = 'u ' + String(u.side || '').toLowerCase() + (u.alive ? '' : ' dead');
         const base = (u.stats && u.stats.base) || {};
-        const hp = (base.HP ?? base['HP'] ?? 0);
+  const hp = (base.hp ?? base.HP ?? base['hp'] ?? 0);
         const ap = (u.ap_left ?? 0);
         dot.innerHTML = `<div style="line-height:1.05; text-align:center;">
       <div>hp: ${hp}</div>
@@ -838,13 +838,13 @@
     </div>`;
         const allStats = [
           ['HP', hp],
-          ['AP', (base.AP ?? base['AP'] ?? ap)],
-          ['ATK', (base.ATK ?? base['ATK'] ?? 0)],
-          ['DEF', (base.DEF ?? base['DEF'] ?? 0)],
-          ['MOV', (base.MOV ?? base['MOV'] ?? 0)],
-          ['RNG', (base.RNG ?? base['RNG'] ?? 0)],
-          ['CRIT', (base.CRIT ?? base['CRIT'] ?? 0)],
-          ['INIT', (base.INIT ?? base['INIT'] ?? 0)],
+          ['AP', (base.ap ?? base.AP ?? base['AP'] ?? ap)],
+          ['ATK', (base.atk ?? base.ATK ?? base['ATK'] ?? 0)],
+          ['DEF', (base.def ?? base.DEF ?? base['DEF'] ?? 0)],
+          ['MOV', (base.mov ?? base.MOV ?? base['MOV'] ?? 0)],
+          ['RNG', (base.rng ?? base.RNG ?? base['RNG'] ?? 0)],
+          ['CRIT', (base.crit ?? base.CRIT ?? base['CRIT'] ?? 0)],
+          ['INIT', (base.init ?? base.INIT ?? base['INIT'] ?? 0)],
         ].map(([k, v]) => `${k}: ${v}`).join('\n');
         dot.title = `${u.name} (${u.side})\nPos: ${u.pos[0]},${u.pos[1]}\n${allStats}`;
 
@@ -936,10 +936,10 @@
           }
           let action;
           if (targetUnit && targetUnit.side !== selectedUnit.side) {
-            action = { kind: 'ATTACK', attacker_id: SELECTED, target_id: targetUnit.id };
+            action = { kind: 'attack', attacker_id: SELECTED, target_id: targetUnit.id };
             log(`Attempting to attack ${targetUnit.name}...`);
           } else {
-            action = { kind: 'MOVE', unit_id: SELECTED, to: to };
+            action = { kind: 'move', unit_id: SELECTED, to: to };
             log(`Attempting to move to ${to[0]},${to[1]}...`);
           }
           await attemptAction(action);
@@ -969,10 +969,10 @@
         }
         for (const entry of LEGAL_ACTIONS) {
           const a = entry.action || entry; // backend returns {action, explanation}
-          if (a.kind === 'MOVE' && a.unit_id === targetId && Array.isArray(a.to)) {
+          if (a.kind === 'move' && a.unit_id === targetId && Array.isArray(a.to)) {
             MOVE_HINTS.add(`${a.to[0]},${a.to[1]}`);
           }
-          if (a.kind === 'ATTACK' && a.attacker_id === targetId) {
+          if (a.kind === 'attack' && a.attacker_id === targetId) {
             const tgt = STATE.units[a.target_id];
             if (tgt && tgt.alive && tgt.side !== sel.side) {
               ATTACK_HINTS.set(`${tgt.pos[0]},${tgt.pos[1]}`, tgt.id);

@@ -55,9 +55,9 @@
     }
   .queue-item.current { border-color: #2196f3; background-color: #f4f9ff; }
     .queue-item.dead { opacity: 0.55; }
-    .queue-item.side-PLAYER { border-left: 4px solid #4caf50; }
-    .queue-item.side-ENEMY { border-left: 4px solid #7e57c2; }
-    .queue-item.side-NEUTRAL { border-left: 4px solid #9e9e9e; }
+  .queue-item.side-player { border-left: 4px solid #4caf50; }
+  .queue-item.side-enemy { border-left: 4px solid #7e57c2; }
+  .queue-item.side-neutral { border-left: 4px solid #9e9e9e; }
   `;
 
   function ensureStyles() {
@@ -101,8 +101,8 @@
       order.forEach(uid => {
         const u = state.units[uid];
         if (!u) return;
-        const base = (u.stats && u.stats.base) || {};
-        const init = base.INIT ?? base['INIT'] ?? 0;
+  const base = (u.stats && u.stats.base) || {};
+  const init = base.init ?? base.INIT ?? base['init'] ?? base['INIT'] ?? 0;
         const nameShort = (u.name || '').slice(0, 10);
         const sideFull = (u.side || '').toLowerCase();
         const sideShort = sideFull.slice(0, 10);
@@ -129,7 +129,7 @@
         }
 
         // Update class
-        card.className = 'queue-item side-' + u.side + (uid === state.current_unit_id ? ' current' : '') + (!u.alive ? ' dead' : '');
+  card.className = 'queue-item side-' + String(u.side || '').toLowerCase() + (uid === state.current_unit_id ? ' current' : '') + (!u.alive ? ' dead' : '');
         card.title = `Unit: ${u.name} (${u.side})\nINIT: ${init}`;
         fragment.appendChild(card);
       });

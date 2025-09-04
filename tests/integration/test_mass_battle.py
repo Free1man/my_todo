@@ -74,8 +74,8 @@ def _manhattan(a: Coord, b: Coord) -> int:
 
 def _alive_counts(sess_json: dict) -> tuple[int, int]:
     units: dict[str, dict] = sess_json["mission"]["units"]
-    p = sum(1 for u in units.values() if u.get("alive", True) and u["side"] == "PLAYER")
-    e = sum(1 for u in units.values() if u.get("alive", True) and u["side"] == "ENEMY")
+    p = sum(1 for u in units.values() if u.get("alive", True) and u["side"] == "player")
+    e = sum(1 for u in units.values() if u.get("alive", True) and u["side"] == "enemy")
     return p, e
 
 
@@ -92,7 +92,9 @@ def _choose_move_destination(sess_json: dict, target: Coord) -> Coord | None:
     units = mission["units"]
     me = units[uid]
     me_pos = tuple(me["pos"])  # type: ignore
-    mov = int(me["stats"]["base"]["MOV"])  # base MOV is fine in this setup
+    mov = int(
+        me["stats"]["base"].get("mov") or me["stats"]["base"].get("MOV") or 0
+    )  # base MOV is fine in this setup
 
     # Plain map with no blocking terrain; avoid only occupied tiles
     occ = _occupied_positions(sess_json)
@@ -164,7 +166,7 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
     steps = 0
     last_logged_turn = 0
 
-    while sess["mission"]["status"] == "IN_PROGRESS" and steps < max_steps:
+    while sess["mission"]["status"] == "in_progress" and steps < max_steps:
         turn = sess["mission"]["turn"]
         if turn != last_logged_turn:
             p, e = _alive_counts(sess)
@@ -176,14 +178,14 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
         uid = mission.get("current_unit_id")
         if not uid:
             # should not happen; end turn to progress
-            sess = _apply_with_session(http, base_url, sid, {"kind": "END_TURN"})
+            sess = _apply_with_session(http, base_url, sid, {"kind": "end_turn"})
             steps += 1
             continue
 
         units = mission["units"]
         me = units[uid]
         if not me.get("alive", True):
-            sess = _apply_with_session(http, base_url, sid, {"kind": "END_TURN"})
+            sess = _apply_with_session(http, base_url, sid, {"kind": "end_turn"})
             steps += 1
             continue
 
@@ -200,7 +202,7 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
         target_id, target_pos = min(
             foes, key=lambda t: (_manhattan(me_pos, t[1]), t[0])
         )
-        rng = int(me["stats"]["base"]["RNG"])  # base RNG is 1 in this setup
+        rng = int(me["stats"]["base"].get("rng") or me["stats"]["base"].get("RNG") or 1)
         dist = _manhattan(me_pos, target_pos)
 
         # Try ATTACK if in range
@@ -210,15 +212,15 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
                     http,
                     base_url,
                     sid,
-                    {"kind": "ATTACK", "attacker_id": uid, "target_id": target_id},
+                    {"kind": "attack", "attacker_id": uid, "target_id": target_id},
                 )
             except requests.HTTPError:
                 # likely no AP or attacker cannot act; end turn
-                sess = _apply_with_session(http, base_url, sid, {"kind": "END_TURN"})
+                sess = _apply_with_session(http, base_url, sid, {"kind": "end_turn"})
             steps += 1
             continue
 
-        # Otherwise MOVE toward target (up to MOV tiles) or END_TURN if blocked
+        # Otherwise MOVE toward target (up to MOV tiles) or end_turn if blocked
         dest = _choose_move_destination(sess, target_pos)
         if dest is not None:
             try:
@@ -226,23 +228,23 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
                     http,
                     base_url,
                     sid,
-                    {"kind": "MOVE", "unit_id": uid, "to": list(dest)},
+                    {"kind": "move", "unit_id": uid, "to": list(dest)},
                 )
             except requests.HTTPError:
                 # fallback to end turn if move rejected
-                sess = _apply_with_session(http, base_url, sid, {"kind": "END_TURN"})
+                sess = _apply_with_session(http, base_url, sid, {"kind": "end_turn"})
             steps += 1
             continue
 
         # No progress possible -> end turn
-        sess = _apply_with_session(http, base_url, sid, {"kind": "END_TURN"})
-        steps += 1
+    sess = _apply_with_session(http, base_url, sid, {"kind": "end_turn"})
+    steps += 1
 
     # 3) Assertions — we should end in victory or defeat within the step budget
     status = sess["mission"]["status"]
     assert status in (
-        "VICTORY",
-        "DEFEAT",
+        "victory",
+        "defeat",
     ), f"Battle did not conclude in {max_steps} steps; status={status}"
     # Log final state
     p, e = _alive_counts(sess)

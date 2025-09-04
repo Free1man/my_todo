@@ -40,8 +40,8 @@ def _units_by_id(sess_json: dict) -> dict[str, dict]:
 
 def _hp_of(sess_json: dict, uid: str) -> int:
     u = _units_by_id(sess_json)[uid]
-    # In the new model, stats are nested
-    return u["stats"]["base"]["HP"]
+    base = u.get("stats", {}).get("base", {})
+    return int(base.get("hp") or base.get("HP") or 0)
 
 
 def _create_tbs_session(base_url: str, mission: Mission) -> tuple[str, dict]:
@@ -80,19 +80,19 @@ def _evaluate(base_url: str, sid: str, payload: dict) -> dict:
             continue
         # match on keys for MOVE and ATTACK (sufficient for tests)
         if (
-            a.get("kind") == "MOVE"
+            a.get("kind") == "move"
             and a.get("unit_id") == payload.get("unit_id")
             and a.get("to") == payload.get("to")
         ):
             return {"legal": True, "explanation": entry.get("explanation", "ok")}
         if (
-            a.get("kind") == "ATTACK"
+            a.get("kind") == "attack"
             and a.get("attacker_id") == payload.get("attacker_id")
             and a.get("target_id") == payload.get("target_id")
         ):
             return {"legal": True, "explanation": entry.get("explanation", "ok")}
         if (
-            a.get("kind") == "USE_SKILL"
+            a.get("kind") == "use_skill"
             and a.get("unit_id") == payload.get("unit_id")
             and a.get("skill_id") == payload.get("skill_id")
         ):
@@ -102,8 +102,8 @@ def _evaluate(base_url: str, sid: str, payload: dict) -> dict:
             ):
                 continue
             return {"legal": True, "explanation": entry.get("explanation", "ok")}
-        if a.get("kind") == "END_TURN":
-            return {"legal": True, "explanation": entry.get("explanation", "ok")}
+    if a.get("kind") == "end_turn":
+        return {"legal": True, "explanation": entry.get("explanation", "ok")}
     return {"legal": False, "explanation": "not in legal_actions"}
 
 

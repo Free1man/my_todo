@@ -46,4 +46,4 @@ def test_info_examples_are_directly_usable(base_url: str):
     )
     la.raise_for_status()
     acts = la.json().get("actions", [])
-    assert any(a.get("action", {}).get("kind") == "MOVE" for a in acts)
+    assert any(a.get("action", {}).get("kind") == "move" for a in acts)

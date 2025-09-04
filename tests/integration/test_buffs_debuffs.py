@@ -48,7 +48,7 @@ def test_heal_after_enemy_attack(base_url: str):
 
     # Player's turn: heal self
     # End enemy turn so the player can act
-    sess = _apply(base_url, sid, {"kind": "END_TURN"})
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
     assert sess["mission"]["current_unit_id"] == "player"
     heal = UseSkillAction(
         unit_id="player", skill_id="skill.heal.simple", target_unit_id="player"
@@ -96,7 +96,7 @@ def test_weaken_enemy_attack_reduces_damage(base_url: str):
     sess = _apply(base_url, sid, weaken_payload)
 
     # End player's turn so enemy can act
-    sess = _apply(base_url, sid, {"kind": "END_TURN"})
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
     assert sess["mission"]["current_unit_id"] == "enemy"
 
     # Record player's HP before enemy attack
@@ -145,10 +145,10 @@ def test_weaken_enemy_attack_reduces_damage(base_url: str):
 
     # Advance two turns to let debuff expire on enemy, then enemy attacks again
     # 1) End enemy's current turn -> player's turn
-    sess = _apply(base_url, sid, {"kind": "END_TURN"})
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
     assert sess["mission"]["current_unit_id"] == "player"
     # 2) End player's turn -> back to enemy
-    sess = _apply(base_url, sid, {"kind": "END_TURN"})
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
     assert sess["mission"]["current_unit_id"] == "enemy"
 
     # Attack again; debuff should be gone now

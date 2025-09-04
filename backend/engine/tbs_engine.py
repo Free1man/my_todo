@@ -145,7 +145,7 @@ class TBSEngine:
             if not u.alive or u.id != m.current_unit_id:
                 continue
 
-            # END_TURN: show once per turn
+            # end_turn: show once per turn
             if not added_end_turn:
                 ok, why = self._evaluate_action(m, EndTurnAction())
                 if ok:

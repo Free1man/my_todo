@@ -49,7 +49,7 @@ def test_victory_on_eliminating_all_enemies(base_url: str):
 
     # 6. Check for victory
     assert _hp_of(sess, target.id) <= 0
-    assert sess["mission"]["status"] == "VICTORY"
+    assert sess["mission"]["status"] == "victory"
 
 
 def test_victory_on_surviving_turns(base_url: str):
@@ -64,25 +64,25 @@ def test_victory_on_surviving_turns(base_url: str):
 
     # 3. Create session
     sid, sess = _create_tbs_session(base_url, mission)
-    assert sess["mission"]["status"] == "IN_PROGRESS"
+    assert sess["mission"]["status"] == "in_progress"
 
     # 4. End turn until victory
-    end_turn_action = {"kind": "END_TURN"}
+    end_turn_action = {"kind": "end_turn"}
 
     # P1 T1
     sess = _apply(base_url, sid, end_turn_action)
     assert sess["mission"]["turn"] == 1
-    assert sess["mission"]["status"] == "IN_PROGRESS"
+    assert sess["mission"]["status"] == "in_progress"
 
     # E1 T1
     sess = _apply(base_url, sid, end_turn_action)
     assert sess["mission"]["turn"] == 2
-    assert sess["mission"]["status"] == "VICTORY"
+    assert sess["mission"]["status"] == "victory"
 
     # P1 T2
     sess = _apply(base_url, sid, end_turn_action)
     assert sess["mission"]["turn"] == 2
-    assert sess["mission"]["status"] == "VICTORY"
+    assert sess["mission"]["status"] == "victory"
 
 
 def test_defeat_on_player_elimination(base_url: str):
@@ -117,4 +117,4 @@ def test_defeat_on_player_elimination(base_url: str):
 
     # 6. Check for defeat
     assert _hp_of(sess, target.id) <= 0
-    assert sess["mission"]["status"] == "DEFEAT"
+    assert sess["mission"]["status"] == "defeat"

@@ -49,7 +49,7 @@ def test_archer_surrounded_attack_count_and_perf(base_url: str):
     )
     r.raise_for_status()
     actions = r.json()["actions"]
-    attack_actions = [a for a in actions if a.get("action", {}).get("kind") == "ATTACK"]
+    attack_actions = [a for a in actions if a.get("action", {}).get("kind") == "attack"]
     # All enemies should be in range now
     assert len(attack_actions) == len(
         enemies

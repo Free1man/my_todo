@@ -30,7 +30,7 @@ class UseSkillAction(BaseModel):
 
 
 class EndTurnAction(BaseModel):
-    kind: ActionKind = ActionKind.END_TURN
+    kind: ActionKind = ActionKind.end_turn
 
 
 Action = MoveAction | AttackAction | UseSkillAction | EndTurnAction
