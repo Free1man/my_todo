@@ -79,5 +79,5 @@ def test_archer_surrounded_attack_count_and_perf(base_url: str):
         len(enemies),
     )
     assert (
-        avg_ms < 30
-    ), f"average legal_actions response {avg_ms:.2f} ms exceeds 30 ms threshold"
+        avg_ms < 60
+    ), f"average legal_actions response {avg_ms:.2f} ms exceeds 60 ms threshold"

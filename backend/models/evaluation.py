@@ -1,14 +1,12 @@
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
-from .enums import Op, TermKind
+from .enums import ActionType, DamageType, Operation, TermKind
 
 
 class StatTerm(BaseModel):
     kind: TermKind
     source: str
-    op: Op
+    op: Operation
     value: float
     note: str | None = None
 
@@ -21,7 +19,7 @@ class StatBreakdown(BaseModel):
 
 
 class ResistEntry(BaseModel):
-    damage_type: Literal["physical", "magic", "true"]
+    damage_type: DamageType
     mult: float
     source: str
 
@@ -32,7 +30,7 @@ class Penetration(BaseModel):
 
 
 class DamageBreakdown(BaseModel):
-    damage_type: Literal["physical", "magic", "true"] = "physical"
+    damage_type: DamageType = DamageType.PHYSICAL
     attack: StatBreakdown
     defense: StatBreakdown
     penetration: Penetration
@@ -65,7 +63,7 @@ class HitChanceBreakdown(BaseModel):
 
 
 class ActionEvaluation(BaseModel):
-    action_type: Literal["attack", "skill", "item", "wait"] = "attack"
+    action_type: ActionType = ActionType.ATTACK
     attacker_id: str
     target_id: str | None = None
     ap_cost: int

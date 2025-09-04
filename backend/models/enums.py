@@ -87,7 +87,21 @@ class TermKind(str, Enum):
     OTHER = "other"
 
 
-class Op(str, Enum):
-    FLAT = "flat"  # +N
-    MULT = "mult"  # +X% applied before final
-    FINAL_MULT = "final_mult"  # +Y% applied at the very end
+class DamageType(str, Enum):
+    PHYSICAL = "physical"
+    MAGIC = "magic"
+    TRUE = "true"
+
+
+class ActionType(str, Enum):
+    ATTACK = "attack"
+    SKILL = "skill"
+    ITEM = "item"
+    WAIT = "wait"
+
+
+class ActionKind(str, Enum):
+    MOVE = "MOVE"
+    ATTACK = "ATTACK"
+    USE_SKILL = "USE_SKILL"
+    END_TURN = "END_TURN"

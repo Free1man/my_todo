@@ -13,10 +13,11 @@ from ..models.api import (
     UseSkillAction,
 )
 from ..models.enums import (
+    ActionType,
+    DamageType,
     GoalKind,
     MissionStatus,
     ModifierSource,
-    Op,
     Operation,
     Side,
     SkillTarget,
@@ -291,7 +292,7 @@ class TBSEngine:
                     StatTerm(
                         kind=kind,
                         source=m.source.value if m.source else "context",
-                        op=Op.FLAT,
+                        op=Operation.ADDITIVE,
                         value=float(m.value),
                     )
                 )
@@ -301,7 +302,7 @@ class TBSEngine:
                     StatTerm(
                         kind=kind,
                         source=m.source.value if m.source else "context",
-                        op=Op.MULT,
+                        op=Operation.MULTIPLICATIVE,
                         value=float(m.value) / 100.0,
                     )
                 )
@@ -313,7 +314,7 @@ class TBSEngine:
                     StatTerm(
                         kind=kind,
                         source=m.source.value if m.source else "context",
-                        op=Op.FLAT,
+                        op=Operation.ADDITIVE,
                         value=delta,
                         note="override",
                     )
@@ -596,7 +597,7 @@ class TBSEngine:
         )
 
         dmg_bd = DamageBreakdown(
-            damage_type="physical",
+            damage_type=DamageType.PHYSICAL,
             attack=atk.breakdown,
             defense=dfn.breakdown,
             penetration=pen,
@@ -639,7 +640,7 @@ class TBSEngine:
         summary = f"Hit {round(hit_result)}% for {int(min_dmg)}–{int(max_dmg)} (avg {final_capped:.1f}). AP:{ap_cost}"
 
         return ActionEvaluation(
-            action_type="attack",
+            action_type=ActionType.ATTACK,
             attacker_id=attacker_id,
             target_id=target_id,
             ap_cost=ap_cost,
