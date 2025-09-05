@@ -251,6 +251,7 @@ def default_demo_mission() -> Mission:
         side_to_move=Side.PLAYER,
         goals=[MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)],
         pre_events=[MissionEvent(id="e.start", text="Stop the goblin!")],
+        enemy_ai=True,
     )
 
     return mission

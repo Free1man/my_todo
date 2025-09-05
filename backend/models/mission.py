@@ -31,3 +31,4 @@ class Mission(BaseModel):
     initiative_order: list[str] = Field(default_factory=list)
     current_unit_id: str | None = None
     status: MissionStatus = MissionStatus.IN_PROGRESS
+    enemy_ai: bool = False

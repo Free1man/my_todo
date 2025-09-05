@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import storage
+from .engine.auto_enemy import enemy_autoplay
 from .engine.tbs_engine import TBSEngine
 from .missions.demo import default_demo_mission
 from .models.api import (
@@ -150,6 +151,10 @@ def apply_action(sid: str, req: ApplyActionRequest):
     if not eval_result.legal:
         raise HTTPException(400, eval_result.explanation)
     new_state = engine.apply(sess, req.action)
+    # Auto-enemy: apply a few enemy actions if enabled on the mission
+    if new_state.mission.enemy_ai:
+        applied, after = enemy_autoplay(engine, new_state)
+        new_state = after
     new_state.mission.status = engine.check_victory_conditions(new_state)
     storage.save(new_state)
     return ApplyActionResponse(
