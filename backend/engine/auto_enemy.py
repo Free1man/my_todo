@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import random
 from typing import TYPE_CHECKING
 
 from ..models.enums import Side
+from .ai import choose_action
 
 if TYPE_CHECKING:  # typing-only imports
     from collections.abc import Sequence
@@ -13,28 +13,30 @@ if TYPE_CHECKING:  # typing-only imports
 
 
 def enemy_autoplay(
-    engine, sess: TBSSession, max_chain: int = 6, rng: random.Random | None = None
+    engine, sess: TBSSession, max_chain: int = 6
 ) -> tuple[int, TBSSession]:
-    """Apply up to max_chain random legal actions for the current side.
+    """Apply up to max_chain AI-chosen legal actions for the current side.
 
     Contract:
-    - Inputs: engine (has list_legal_actions(sess) and apply(sess, action)); session; max_chain; rng
-    - Behavior: picks uniformly at random from legal actions each step; stops when none are available or cap reached.
+    - Inputs: engine (has list_legal_actions(sess) and apply(sess, action)); session; max_chain
+    - Behavior: deterministically selects the best action by heuristic each step; stops when none are available or cap reached.
     - Output: (number of actions applied, updated session).
     """
-    r = rng or random
     applied = 0
     cur = sess
     while applied < max_chain:
         # Only act for enemy side; stop if it's player's turn
         if cur.mission.side_to_move != Side.ENEMY:
             break
-        la = engine.list_legal_actions(cur, explain=False)
+        # Ask for explain=True so attacks include expected_damage/AP details for scoring
+        la = engine.list_legal_actions(cur, explain=True)
         actions: Sequence[LegalAction] = tuple(la.actions)
         if not actions:
             break
-        choice = r.choice(actions)
-        action: Action = choice.action
+        picked = choose_action(cur.mission, actions)
+        if picked is None:
+            break
+        action: Action = picked
         cur = engine.apply(cur, action)
         applied += 1
     return applied, cur
