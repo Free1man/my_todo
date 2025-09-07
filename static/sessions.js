@@ -45,7 +45,13 @@
       // Assume HTML is already in place, just wire events
       document.getElementById('new').onclick = global.handleNewGame;
       document.getElementById('create-session').onclick = global.handleCreateSession;
-      document.getElementById('refresh-sessions').onclick = () => this.refresh();
+      let last = 0;
+      document.getElementById('refresh-sessions').onclick = () => {
+        const now = Date.now();
+        if (now - last < 750) return; // throttle
+        last = now;
+        this.refresh();
+      };
       return Sessions;
     },
 

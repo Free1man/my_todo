@@ -9,7 +9,7 @@
       const gridEl = document.getElementById('grid');
       if (!gridEl || !state) return;
       const map = state.map;
-      if (!map) return;
+    if (!map || !map.width || !map.height) return;
       gridEl.style.gridTemplateColumns = `repeat(${map.width}, 32px)`;
       gridEl.style.gridTemplateRows = `repeat(${map.height}, 32px)`;
       gridEl.innerHTML = '';

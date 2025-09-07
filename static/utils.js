@@ -1,5 +1,6 @@
 (function (global) {
   // Utils for common functions
+  global.BUSY = false;
   global.api = async function(path, opts = {}) {
     const r = await fetch(path, { headers: { 'content-type': 'application/json' }, ...opts });
     if (!r.ok) throw new Error(await r.text());
@@ -23,6 +24,22 @@
   global.isOccupied = (x, y) => Object.values(global.STATE.units).some(u => u.alive && u.pos[0] === x && u.pos[1] === y);
   global.neighbors = (x, y) => [[x+1,y],[x-1,y],[x,y+1],[x,y-1]].filter(([nx, ny]) => global.inBounds(nx, ny));
   global.clearHints = () => { global.MOVE_HINTS.clear(); global.ATTACK_HINTS.clear(); };
+
+  // Batch UI renders into the next animation frame
+  global._renderScheduled = false;
+  global.requestRender = function() {
+    if (global._renderScheduled) return;
+    global._renderScheduled = true;
+    requestAnimationFrame(() => {
+      global._renderScheduled = false;
+      if (global.Game) {
+        global.Game.render(global.STATE, global.SID, global.SELECTED, global.PREVIEW_UNIT, global.LEGAL_ACTIONS);
+      }
+      if (global.Grid) {
+        global.Grid.render(global.STATE, global.SELECTED, global.PREVIEW_UNIT, global.MOVE_HINTS, global.ATTACK_HINTS);
+      }
+    });
+  };
 
   global.showGame = function() {
     document.getElementById('sessions').style.display = 'none';
@@ -68,16 +85,21 @@
   };
 
   global.handleEndTurn = async function() {
+    if (global.BUSY || !global.SID) return;
+    global.BUSY = true;
     const action = { kind: 'end_turn' };
-    const res = await global.api(`/sessions/${global.SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
-    global.STATE = res.session.mission;
-    global.SELECTED = global.STATE.current_unit_id || null;
-    global.PREVIEW_UNIT = null;
-    global.LEGAL_ACTIONS = [];
-    global.log(`Turn ended: ${res.explanation}`, 'success');
-    global.updateUI();
-    await global.fetchLegalAndComputeHints();
-    global.render();
+    try {
+      const res = await global.api(`/sessions/${global.SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
+      global.STATE = res.session.mission;
+      global.SELECTED = global.STATE.current_unit_id || null;
+      global.PREVIEW_UNIT = null;
+      global.LEGAL_ACTIONS = [];
+      global.log(`Turn ended: ${res.explanation}`, 'success');
+      await global.fetchLegalAndComputeHints();
+      global.updateUI();
+    } finally {
+      global.BUSY = false;
+    }
   };
 
   global.loadSession = async function(id) {
@@ -90,8 +112,7 @@
       global.LEGAL_ACTIONS = [];
       await global.fetchLegalAndComputeHints();
       global.log(`Loaded session ${global.SID}`);
-      global.updateUI();
-      global.render();
+  global.updateUI();
       global.showGame();
     } catch (e) {
       global.log(`Error loading session: ${e.message}`, 'error');
@@ -99,24 +120,25 @@
   };
 
   global.attemptAction = async function(action) {
-    if (!global.SID) return false;
+    if (!global.SID || global.BUSY) return false;
+    global.BUSY = true;
     try {
       const res = await global.api(`/sessions/${global.SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
       global.STATE = res.session.mission;
       global.SELECTED = global.STATE.current_unit_id || null;
       global.PREVIEW_UNIT = null;
       global.log(`Action applied: ${res.explanation}`, 'success');
-      global.updateUI();
       await global.fetchLegalAndComputeHints();
-      global.render();
+      global.updateUI();
       return true;
     } catch (e) {
       global.log(`Action failed: ${e.message}`, 'error');
       global.MOVE_HINTS.clear();
       global.ATTACK_HINTS.clear();
       global.updateUI();
-      global.render();
       return false;
+    } finally {
+      global.BUSY = false;
     }
   };
 
@@ -150,8 +172,7 @@
           }
         }
       }
-      global.Game.renderPreviewUnitPanel(global.STATE, global.PREVIEW_UNIT, global.MOVE_HINTS, global.ATTACK_HINTS);
-      return;
+  return;
     }
 
     const base = (sel.stats && sel.stats.base) || {};
@@ -186,18 +207,14 @@
         }
       }
     }
-    global.Game.renderPreviewUnitPanel(global.STATE, global.PREVIEW_UNIT, global.MOVE_HINTS, global.ATTACK_HINTS);
+  // Preview panel is rendered as part of Game.render; no direct DOM writes here
   };
 
   global.updateUI = function() {
-    if (global.Game) {
-      global.Game.render(global.STATE, global.SID, global.SELECTED, global.PREVIEW_UNIT, global.LEGAL_ACTIONS);
-    }
+  global.requestRender();
   };
 
   global.render = function() {
-    if (global.Grid) {
-      global.Grid.render(global.STATE, global.SELECTED, global.PREVIEW_UNIT, global.MOVE_HINTS, global.ATTACK_HINTS);
-    }
+  global.requestRender();
   };
 })(window);
