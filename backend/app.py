@@ -3,16 +3,19 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import storage
 from .engine.auto_enemy import enemy_autoplay
-from .engine.tbs_engine import TBSEngine
+from .engine.core import TBSEngine
+from .logging_listeners import register_listeners
 from .missions.demo import default_demo_mission
 from .models.api import (
+    ActionLogEntry,
+    ActionLogResponse,
     ApplyActionRequest,
     ApplyActionResponse,
     AttackAction,
@@ -30,6 +33,7 @@ from .models.units import Unit
 
 app = FastAPI(title="Abstract Tactics - TBS Only")
 engine = TBSEngine()
+register_listeners()
 
 app.add_middleware(
     CORSMiddleware,
@@ -147,15 +151,16 @@ def apply_action(sid: str, req: ApplyActionRequest):
     sess = storage.get(sid)
     if not sess:
         raise HTTPException(404, "session not found")
-    eval_result = engine.evaluate(sess, req.action)
+    eval_result, new_state = engine.process_action(sess, req.action)
     if not eval_result.legal:
         raise HTTPException(400, eval_result.explanation)
-    new_state = engine.apply(sess, req.action)
     # Auto-enemy: apply a few enemy actions if enabled on the mission
     if new_state.mission.enemy_ai:
         applied, after = enemy_autoplay(engine, new_state)
         new_state = after
     new_state.mission.status = engine.check_victory_conditions(new_state)
+    # Applied action already logged inside engine.apply
+
     storage.save(new_state)
     return ApplyActionResponse(
         applied=True,
@@ -167,4 +172,27 @@ def apply_action(sid: str, req: ApplyActionRequest):
 # Serve static UI under /static (so API routes remain clean)
 app.mount("/static", StaticFiles(directory="static", html=True), name="static")
 
-# (Removed standalone /tbs/evaluate; use /sessions/{sid}/legal_actions?explain=true instead)
+
+@app.get("/sessions/{sid}/log", response_model=ActionLogResponse)
+def get_action_log(sid: str, limit: int = Query(50, ge=1, le=1000)):
+    # basic existence check
+    sess = storage.get(sid)
+    if not sess:
+        raise HTTPException(404, "session not found")
+    try:
+        raw = storage.logs.list(sid, limit)
+    except Exception:
+        raw = []
+    entries: list[ActionLogEntry] = []
+    from pydantic import TypeAdapter
+
+    # Validate each stored JSON string as a single ActionLogEntry
+    ta = TypeAdapter(ActionLogEntry)
+    for s in raw:
+        try:
+            entries.append(ta.validate_json(s))
+        except Exception:
+            # Skip malformed entries rather than failing the whole response
+            continue
+
+    return ActionLogResponse(entries=entries)

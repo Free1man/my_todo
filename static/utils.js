@@ -7,13 +7,8 @@
     return r.json();
   };
 
-  global.log = function(msg, level) {
-    if (global.Log) {
-      global.Log.addEntry(msg, level);
-    } else {
-      console.log(msg);
-    }
-  };
+  // Client-side logging removed; rely on server-side log endpoint
+  global.log = function() {};
 
   global.getUnit = (id) => (global.STATE && id ? global.STATE.units[id] : null);
   global.tileKey = (x, y) => `${x},${y}`;
@@ -61,21 +56,24 @@
 
   global.handleNewGame = async function() {
     try {
-      global.log('Creating new session...');
       const res = await global.api('/sessions', { method: 'POST', body: JSON.stringify({}) });
       global.SID = res.id;
       global.STATE = res.mission;
       global.SELECTED = global.STATE.current_unit_id || null;
       global.PREVIEW_UNIT = null;
       global.LEGAL_ACTIONS = [];
-      global.log(`Session ${global.SID} created`);
-        global.updateUI();
-        await global.fetchLegalAndComputeHints();
-        global.render();
-        global.showGame();
-        global.Sessions.refresh();
+      global.updateUI();
+      await global.fetchLegalAndComputeHints();
+      global.render();
+      global.showGame();
+      global.Sessions.refresh();
+      // load initial server log
+      if (window.Log) {
+        const entries = await window.Log.fetchActionLog(window.SID, 50);
+        window.Log.renderActionLog('server-log', entries);
+      }
     } catch (e) {
-      global.log(`Error: ${e.message}`, 'error');
+      console.error('Error creating session:', e);
     }
   };
 
@@ -94,9 +92,13 @@
       global.SELECTED = global.STATE.current_unit_id || null;
       global.PREVIEW_UNIT = null;
       global.LEGAL_ACTIONS = [];
-      global.log(`Turn ended: ${res.explanation}`, 'success');
       await global.fetchLegalAndComputeHints();
       global.updateUI();
+      // refresh server log panel
+      if (window.Log) {
+        const entries = await window.Log.fetchActionLog(window.SID, 50);
+        window.Log.renderActionLog('server-log', entries);
+      }
     } finally {
       global.BUSY = false;
     }
@@ -111,11 +113,15 @@
       global.PREVIEW_UNIT = null;
       global.LEGAL_ACTIONS = [];
       await global.fetchLegalAndComputeHints();
-      global.log(`Loaded session ${global.SID}`);
   global.updateUI();
       global.showGame();
+      // load initial server log
+      if (window.Log) {
+        const entries = await window.Log.fetchActionLog(window.SID, 50);
+        window.Log.renderActionLog('server-log', entries);
+      }
     } catch (e) {
-      global.log(`Error loading session: ${e.message}`, 'error');
+  console.error('Error loading session:', e);
     }
   };
 
@@ -127,12 +133,16 @@
       global.STATE = res.session.mission;
       global.SELECTED = global.STATE.current_unit_id || null;
       global.PREVIEW_UNIT = null;
-      global.log(`Action applied: ${res.explanation}`, 'success');
       await global.fetchLegalAndComputeHints();
       global.updateUI();
+      // refresh server log panel
+      if (window.Log) {
+        const entries = await window.Log.fetchActionLog(window.SID, 50);
+        window.Log.renderActionLog('server-log', entries);
+      }
       return true;
     } catch (e) {
-      global.log(`Action failed: ${e.message}`, 'error');
+  console.error('Action failed:', e);
       global.MOVE_HINTS.clear();
       global.ATTACK_HINTS.clear();
       global.updateUI();
@@ -157,7 +167,7 @@
         const res = await global.api(`/sessions/${global.SID}/legal_actions?explain=true`);
         global.LEGAL_ACTIONS = res.actions || [];
       } catch (e) {
-        global.log(`Error fetching legal actions: ${e.message}`, 'error');
+        console.error('Error fetching legal actions:', e);
         return;
       }
       for (const entry of global.LEGAL_ACTIONS) {
@@ -272,9 +282,9 @@
         }
       }
       global.SKILL_TARGETS = { tiles, units };
-      global.log(`Targeting ${skillId}: ${units.size} unit(s), ${tiles.size} tile(s)`);
+  // no client log
     } catch (e) {
-      global.log(`Error loading skill targets: ${e.message}`, 'error');
+  console.error('Error loading skill targets:', e);
       global.SKILL_TARGETING = null;
       global.SKILL_TARGETS = null;
     }

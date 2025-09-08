@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+from collections import deque
 
 from pydantic import TypeAdapter
 from redis import Redis
@@ -15,6 +16,41 @@ EVICT_ON_GET = os.getenv("EVICT_ON_GET", "true").lower() != "false"
 r = Redis.from_url(REDIS_URL, decode_responses=True)
 
 INDEX = "sess:index"  # sorted-set: member=sid, score=last touch (unix seconds)
+ACTION_LOG_MAX = int(os.getenv("ACTION_LOG_MAX", "200"))
+
+
+def _log_key(sid: str) -> str:
+    return f"sess:{sid}:log"
+
+
+class ActionLogStore:
+    def __init__(self, redis_client=None):
+        self.r = redis_client
+        self._mem: dict[str, deque[str]] = {}
+
+    def append(self, sid: str, entry_json: str) -> None:
+        if self.r is not None:
+            key = _log_key(sid)
+            pipe = self.r.pipeline()
+            pipe.lpush(key, entry_json)
+            pipe.ltrim(key, 0, ACTION_LOG_MAX - 1)
+            pipe.execute()
+        else:
+            dq = self._mem.setdefault(sid, deque(maxlen=ACTION_LOG_MAX))
+            dq.appendleft(entry_json)
+
+    def list(self, sid: str, limit: int | None = None) -> list[str]:
+        n = limit or ACTION_LOG_MAX
+        if self.r is not None:
+            return self.r.lrange(_log_key(sid), 0, n - 1)
+        dq = self._mem.get(sid, deque())
+        return list(dq)[:n]
+
+    def clear(self, sid: str) -> None:
+        if self.r is not None:
+            self.r.delete(_log_key(sid))
+        else:
+            self._mem.pop(sid, None)
 
 
 def _k(sid: str) -> str:
@@ -39,6 +75,8 @@ def _enforce_cap() -> None:
     pipe = r.pipeline()
     for sid, _ in evicted:
         pipe.delete(_k(sid))
+    # also remove logs for evicted sessions
+    pipe.delete(_log_key(sid))
     pipe.execute()
 
 
@@ -88,3 +126,6 @@ def list_all() -> list[TBSSession]:
         r.zrem(INDEX, *stale_sids)
 
     return sessions
+
+
+logs = ActionLogStore(r)

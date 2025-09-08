@@ -104,4 +104,10 @@ class ActionKind(str, Enum):
     MOVE = "move"
     ATTACK = "attack"
     USE_SKILL = "use_skill"
-    end_turn = "end_turn"
+    END_TURN = "end_turn"
+
+
+class ActionLogResult(str, Enum):
+    APPLIED = "applied"
+    ILLEGAL = "illegal"
+    ERROR = "error"

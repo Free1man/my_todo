@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from datetime import datetime
+from typing import Any
 
-from .enums import ActionKind
+from pydantic import BaseModel, Field
+
+from .enums import ActionKind, ActionLogResult
 from .evaluation import ActionEvaluation
 from .mission import Mission
 
@@ -33,7 +36,7 @@ class UseSkillAction(BaseModel):
 
 
 class EndTurnAction(BaseModel):
-    kind: ActionKind = ActionKind.end_turn
+    kind: ActionKind = ActionKind.END_TURN
 
 
 Action = MoveAction | AttackAction | UseSkillAction | EndTurnAction
@@ -79,3 +82,21 @@ class LegalAction(BaseModel):
 
 class LegalActionsResponse(BaseModel):
     actions: list[LegalAction]
+
+
+# ----- Action Log -----
+
+
+class ActionLogEntry(BaseModel):
+    ts: datetime = Field(default_factory=datetime.now)
+    session_id: str
+    turn: int
+    actor_unit_id: str | None = None
+    action: Action
+    result: ActionLogResult = ActionLogResult.APPLIED
+    message: str | None = None
+    attack_eval: dict[str, Any] | None = None
+
+
+class ActionLogResponse(BaseModel):
+    entries: list[ActionLogEntry]
