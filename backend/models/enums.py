@@ -47,6 +47,8 @@ class ModifierSource(str, Enum):
     MAP = "map"
     INJURY = "injury"
     SKILL = "skill"
+    CONTEXT = "context"
+    OTHER = "other"
     GLOBAL = "global"
 
 
@@ -74,17 +76,7 @@ class MissionStatus(str, Enum):
     DEFEAT = "defeat"
 
 
-class TermKind(str, Enum):
-    BASE = "base"
-    ITEM = "item"
-    ARTIFACT = "artifact"
-    BUFF = "buff"
-    DEBUFF = "debuff"
-    STANCE = "stance"
-    TERRAIN = "terrain"
-    CONTEXT = "context"
-    SKILL = "skill"
-    OTHER = "other"
+# TermKind removed: use ModifierSource directly for classification/presentation
 
 
 class DamageType(str, Enum):

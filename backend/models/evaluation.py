@@ -1,10 +1,10 @@
 from pydantic import BaseModel, Field
 
-from .enums import ActionType, DamageType, Operation, TermKind
+from .enums import ActionType, DamageType, ModifierSource, Operation
 
 
 class StatTerm(BaseModel):
-    kind: TermKind
+    kind: ModifierSource
     source: str
     op: Operation
     value: float

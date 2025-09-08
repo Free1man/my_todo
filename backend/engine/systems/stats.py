@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from pydantic import BaseModel
 
-from ...models.enums import ModifierSource, Operation, StatName, TermKind
+from ...models.enums import ModifierSource, Operation, StatName
 from ...models.evaluation import StatBreakdown, StatTerm
 from .pathfinding import manhattan
 
@@ -19,18 +19,8 @@ class EffStat(BaseModel):
     breakdown: StatBreakdown
 
 
-def _map_source_to_kind(src: ModifierSource | None) -> TermKind:
-    if src == ModifierSource.ITEM:
-        return TermKind.ITEM
-    if src == ModifierSource.AURA:
-        return TermKind.BUFF
-    if src == ModifierSource.MAP:
-        return TermKind.TERRAIN
-    if src == ModifierSource.INJURY:
-        return TermKind.DEBUFF
-    if src == ModifierSource.SKILL:
-        return TermKind.SKILL
-    return TermKind.CONTEXT
+def _source_kind(src: ModifierSource | None) -> ModifierSource:
+    return src or ModifierSource.CONTEXT
 
 
 def eff_stat_with_trace(mission: Mission, u: Unit, stat: StatName) -> EffStat:
@@ -68,7 +58,7 @@ def eff_stat_with_trace(mission: Mission, u: Unit, stat: StatName) -> EffStat:
     for m in all_mods:
         if m.stat != stat:
             continue
-        kind = _map_source_to_kind(m.source)
+        kind = _source_kind(m.source)
         if m.operation == Operation.ADDITIVE:
             add_flat += m.value
             terms.append(
