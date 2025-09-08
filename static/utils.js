@@ -176,8 +176,12 @@
     }
 
     const base = (sel.stats && sel.stats.base) || {};
-    const MOV = Number(base.MOV ?? base['MOV'] ?? 0);
-    const RNG = Number(base.RNG ?? base['RNG'] ?? 0);
+    const MOV = Number(
+      base.MOV ?? base['MOV'] ?? base.mov ?? base['mov'] ?? 0
+    );
+    const RNG = Number(
+      base.RNG ?? base['RNG'] ?? base.rng ?? base['rng'] ?? 0
+    );
 
     if (MOV > 0) {
       const start = [sel.pos[0], sel.pos[1]];
@@ -282,4 +286,18 @@
     global.SKILL_TARGETS = null;
     global.requestRender();
   };
+
+  // Right-click (context menu) cancels targeting if active, before other handlers
+  document.addEventListener(
+    'contextmenu',
+    (e) => {
+      if (window.SKILL_TARGETING) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        window.endSkillTargeting();
+      }
+    },
+    true // capture to intercept before element handlers like unit preview
+  );
 })(window);

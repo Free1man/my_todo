@@ -39,7 +39,15 @@
       const u = state.units[state.current_unit_id];
       if (!u) { wrap.innerHTML = 'No active unit.'; return; }
       const base = (u.stats && u.stats.base) || {};
-      const get = (k) => base[k] ?? base[String(k)] ?? 0;
+      const get = (k) => {
+        const key = String(k);
+        return (
+          base[key] ??
+          base[key.toLowerCase?.() || key] ??
+          base[key.toUpperCase?.() || key] ??
+          0
+        );
+      };
       const stats = {
         HP: get('HP'), AP: get('AP'), ATK: get('ATK'), DEF: get('DEF'),
         MOV: get('MOV'), RNG: get('RNG'), CRIT: get('CRIT'), INIT: get('INIT')
@@ -152,7 +160,15 @@
       }
       const u = state.units[uid];
       const base = (u.stats && u.stats.base) || {};
-      const get = (k) => base[k] ?? base[String(k)] ?? 0;
+      const get = (k) => {
+        const key = String(k);
+        return (
+          base[key] ??
+          base[key.toLowerCase?.() || key] ??
+          base[key.toUpperCase?.() || key] ??
+          0
+        );
+      };
       const MOV = get('MOV');
       const RNG = get('RNG');
       const AP = u.ap_left ?? get('AP') ?? 0;
