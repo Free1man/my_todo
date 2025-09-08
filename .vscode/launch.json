@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach: API in container",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "localhost", "port": 5678 },
+      "justMyCode": true
+    },
+    {
+      "name": "Debug tests (pytest) in container",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q", "tests"],
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug: tests + API",
+      "configurations": [
+        "Attach: API in container",
+        "Debug tests (pytest) in container"
+      ],
+      "stopAll": true
+    }
+  ]
+}

@@ -6,12 +6,16 @@
   "mounts": [
     "source=${localWorkspaceFolder},target=/app,type=bind"
   ],
-  "forwardPorts": [8000],
+  "forwardPorts": [8000, 5678],
   "portsAttributes": {
     "8000": {
       "label": "FastAPI",
       "onAutoForward": "openBrowserOnce"
-    }
+    },
+    "5678": { "label": "debugpy" }
+  },
+  "containerEnv": {
+    "DEBUG": "1"
   },
 
   "customizations": {
@@ -23,7 +27,8 @@
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "ms-python.black-formatter"
+        "ms-python.black-formatter",
+        "ms-python.debugpy"
       ]
     }
   },

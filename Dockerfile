@@ -44,4 +44,5 @@ COPY tests /app/tests
 RUN if [ "$PROD" = "true" ]; then rm -rf /app/tests; fi
 
 EXPOSE 8000
+EXPOSE 5678
 CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
