@@ -80,8 +80,83 @@ class TBSEngine:
                 u.skill_charges[skill.id] = max(
                     0, u.skill_charges.get(skill.id, skill.charges) - 1
                 )
-            if skill.apply_mods:
-                # Determine the unit that will receive the skill's effects
+
+            # Helper: read MAX_HP tag if present to cap heals
+            def _max_hp_from_tags(unit: Unit) -> int | None:
+                for tag in unit.tags:
+                    if isinstance(tag, str) and tag.startswith("MAX_HP="):
+                        try:
+                            return int(tag.split("=", 1)[1])
+                        except Exception:
+                            return None
+                return None
+
+            # Apply skill effects based on target type
+            if skill.target == SkillTarget.TILE and action.target_tile is not None:
+                # AoE: apply HP/mods within an area around target tile. Use action-provided offsets if given, else default 3x3.
+                tx, ty = action.target_tile
+                # Determine sign of HP delta if present
+                hp_delta = None
+                for m in skill.apply_mods or []:
+                    if m.stat == StatName.HP and m.operation == Operation.ADDITIVE:
+                        hp_delta = m.value
+                        break
+                offsets = action.area_offsets or [
+                    (-1, -1),
+                    (-1, 0),
+                    (-1, 1),
+                    (0, -1),
+                    (0, 0),
+                    (0, 1),
+                    (1, -1),
+                    (1, 0),
+                    (1, 1),
+                ]
+                for dx, dy in offsets:
+                    x, y = tx + dx, ty + dy
+                    if not mission.map.in_bounds((x, y)):
+                        continue
+                    # find any living unit on this tile
+                    for t in mission.units.values():
+                        if not t.alive or t.pos != (x, y):
+                            continue
+                        # Friendly fire: by default, negative delta affects enemies only; positive affects allies only
+                        if hp_delta is not None:
+                            if hp_delta < 0 and t.side == u.side:
+                                continue
+                            if hp_delta > 0 and t.side != u.side:
+                                continue
+                            cur = t.stats.base.get(StatName.HP, 0)
+                            new_hp = cur + hp_delta
+                            max_cap = _max_hp_from_tags(t)
+                            if max_cap is not None:
+                                new_hp = min(max_cap, new_hp)
+                            t.stats.base[StatName.HP] = max(0, new_hp)
+                            if t.stats.base[StatName.HP] == 0:
+                                t.alive = False
+                        # Non-HP apply_mods (temporary) apply to all units that pass the friendly/enemy filter
+                        temp_mods: list[StatModifier] = []
+                        for m in skill.apply_mods or []:
+                            if m.stat == StatName.HP:
+                                continue
+                            # If effect is a buff (positive additive/mult), limit to allies; if debuff (negative), limit to enemies
+                            if (
+                                m.operation == Operation.ADDITIVE
+                                and m.value < 0
+                                and t.side == u.side
+                            ):
+                                continue
+                            if (
+                                m.operation == Operation.ADDITIVE
+                                and m.value > 0
+                                and t.side != u.side
+                            ):
+                                continue
+                            temp_mods.append(m)
+                        if temp_mods:
+                            self._attach_temp_mods(t, temp_mods)
+            else:
+                # Unit/self-targeted skills
                 target_unit = u
                 if (
                     skill.target in (SkillTarget.ALLY_UNIT, SkillTarget.ENEMY_UNIT)
@@ -89,24 +164,11 @@ class TBSEngine:
                 ):
                     target_unit = mission.units[action.target_unit_id]
 
-                # Split HP-direct effects vs. temporary modifiers
                 temp_mods: list[StatModifier] = []
-
-                # Helper: read MAX_HP tag if present to cap heals
-                def _max_hp_from_tags(unit: Unit) -> int | None:
-                    for tag in unit.tags:
-                        if isinstance(tag, str) and tag.startswith("MAX_HP="):
-                            try:
-                                return int(tag.split("=", 1)[1])
-                            except Exception:
-                                return None
-                    return None
-
                 max_hp_cap = _max_hp_from_tags(target_unit)
 
-                for m in skill.apply_mods:
+                for m in skill.apply_mods or []:
                     if m.stat == StatName.HP:
-                        # Directly modify base HP for healing/damage skills
                         if m.operation == Operation.ADDITIVE:
                             cur = target_unit.stats.base.get(StatName.HP, 0)
                             new_hp = cur + m.value
@@ -119,7 +181,6 @@ class TBSEngine:
                                 val = min(max_hp_cap, val)
                             target_unit.stats.base[StatName.HP] = max(0, val)
                         else:
-                            # Multiplicative and others are treated as temporary mods to HP
                             temp_mods.append(m)
                     else:
                         temp_mods.append(m)
@@ -227,8 +288,19 @@ class TBSEngine:
                             ok, why = self._evaluate_action(m, act)
                             if ok:
                                 out.append(LegalAction(action=act, explanation=why))
-
-                # TILE target omitted in demo (engine's apply ignores TILE for now)
+                elif s.target == SkillTarget.TILE:
+                    # Allow targeting any tile within range
+                    for ty in range(m.map.height):
+                        for tx in range(m.map.width):
+                            if manhattan(u.pos, (tx, ty)) <= s.range:
+                                act = UseSkillAction(
+                                    unit_id=u.id,
+                                    skill_id=s.id,
+                                    target_tile=(tx, ty),
+                                )
+                                ok, why = self._evaluate_action(m, act)
+                                if ok:
+                                    out.append(LegalAction(action=act, explanation=why))
 
         return LegalActionsResponse(actions=out)
 
@@ -453,6 +525,13 @@ class TBSEngine:
                     return False, "target not enemy"
                 if manhattan(u.pos, target.pos) > skill.range:
                     return False, "target out of range"
+            elif skill.target == SkillTarget.TILE:
+                if action.target_tile is None:
+                    return False, "missing target tile"
+                if not mission.map.in_bounds(action.target_tile):
+                    return False, "tile out of bounds"
+                if manhattan(u.pos, action.target_tile) > skill.range:
+                    return False, "tile out of range"
             return True, "ok"
 
         if isinstance(action, EndTurnAction):

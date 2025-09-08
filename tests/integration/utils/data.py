@@ -110,6 +110,29 @@ def weaken_attack_skill_template(
     )
 
 
+def fireball_skill_template(power: int = 3, *, rng: int = 3, ap_cost: int = 1) -> Skill:
+    """A TILE-target AOE that deals flat damage (negative HP) within an area around the target tile.
+    Shape is determined by the action payload's area_offsets; if none provided, engine defaults to 3x3.
+    """
+    return Skill(
+        id="skill.fireball",
+        name="Fireball",
+        kind=SkillKind.ACTIVE,
+        ap_cost=ap_cost,
+        range=rng,
+        target=SkillTarget.TILE,
+        cooldown=0,
+        apply_mods=[
+            StatModifier(
+                stat=StatName.HP,
+                operation=Operation.ADDITIVE,
+                value=-power,
+                source=ModifierSource.SKILL,
+            )
+        ],
+    )
+
+
 # ----- Unit Templates -----
 
 

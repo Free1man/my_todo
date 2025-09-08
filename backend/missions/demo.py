@@ -12,8 +12,10 @@ def default_demo_mission() -> Mission:
     terrain = [[Terrain.PLAIN for _ in range(width)] for _ in range(height)]
     # Horizontal river at y == 3 with a 2-tile bridge at x == 3..4
     for x in range(width):
-        if x not in (3, 4):
-            terrain[3][x] = Terrain.WATER
+        terrain[3][x] = Terrain.WATER
+    terrain[3][3] = Terrain.PLAIN
+    terrain[3][4] = Terrain.PLAIN
+
     # Add some forests (defensive cover) and hills (high ground)
     forests = {(1, 0), (2, 0), (1, 1), (6, 2), (0, 5), (1, 5)}
     hills = {(6, 1), (2, 5), (5, 6)}
@@ -91,167 +93,138 @@ def default_demo_mission() -> Mission:
         cooldown=2,
     )
 
-    # Additional unique items to diversify units
-    short_bow = Item(
-        id="item.bow.short",
-        name="Short Bow",
-        mods=[
+    heal = Skill(
+        id="skill.active.heal",
+        name="Heal",
+        kind=SkillKind.ACTIVE,
+        ap_cost=1,
+        range=3,
+        target=SkillTarget.ALLY_UNIT,
+        apply_mods=[
+            StatModifier(
+                stat=StatName.HP,
+                operation=Operation.ADDITIVE,
+                value=4,
+                source=ModifierSource.SKILL,
+            )
+        ],
+        cooldown=1,
+    )
+
+    fireball = Skill(
+        id="skill.active.fireball",
+        name="Fireball",
+        kind=SkillKind.ACTIVE,
+        ap_cost=2,
+        range=4,
+        target=SkillTarget.TILE,
+        apply_mods=[
+            StatModifier(
+                stat=StatName.HP,
+                operation=Operation.ADDITIVE,
+                value=-3,
+                source=ModifierSource.SKILL,
+            )
+        ],
+        cooldown=2,
+    )
+
+    self_rally = Skill(
+        id="skill.active.rally_self",
+        name="Battle Trance",
+        kind=SkillKind.ACTIVE,
+        ap_cost=1,
+        range=0,
+        target=SkillTarget.SELF,
+        apply_mods=[
             StatModifier(
                 stat=StatName.ATK,
                 operation=Operation.ADDITIVE,
                 value=1,
-                source=ModifierSource.ITEM,
+                source=ModifierSource.SKILL,
+                duration_turns=2,
+            )
+        ],
+        cooldown=2,
+    )
+
+    units = {
+        "u.fighter": Unit(
+            id="u.fighter",
+            side=Side.PLAYER,
+            name="Fighter",
+            pos=(1, 1),
+            items=[iron_sword, leather_armor],
+            skills=[active_shout, passive_focus],
+        ),
+        "u.priest": Unit(
+            id="u.priest",
+            side=Side.PLAYER,
+            name="Priest",
+            pos=(2, 1),
+            skills=[heal],
+        ),
+        "u.mage": Unit(
+            id="u.mage",
+            side=Side.PLAYER,
+            name="Mage",
+            pos=(0, 2),
+            skills=[fireball, self_rally],
+        ),
+        "e.goblin1": Unit(
+            id="e.goblin1",
+            side=Side.ENEMY,
+            name="Goblin",
+            pos=(5, 5),
+            stats=StatBlock(
+                base={
+                    StatName.HP: 8,
+                    StatName.AP: 2,
+                    StatName.ATK: 2,
+                    StatName.DEF: 0,
+                    StatName.MOV: 4,
+                    StatName.RNG: 1,
+                    StatName.CRIT: 0,
+                    StatName.INIT: 8,
+                }
             ),
-            StatModifier(
-                stat=StatName.RNG,
-                operation=Operation.ADDITIVE,
-                value=1,
-                source=ModifierSource.ITEM,
+        ),
+        "e.goblin2": Unit(
+            id="e.goblin2",
+            side=Side.ENEMY,
+            name="Goblin",
+            pos=(6, 5),
+            stats=StatBlock(
+                base={
+                    StatName.HP: 8,
+                    StatName.AP: 2,
+                    StatName.ATK: 2,
+                    StatName.DEF: 0,
+                    StatName.MOV: 4,
+                    StatName.RNG: 1,
+                    StatName.CRIT: 0,
+                    StatName.INIT: 7,
+                }
             ),
-        ],
-    )
-    light_boots = Item(
-        id="item.boots.light",
-        name="Light Boots",
-        mods=[
-            StatModifier(
-                stat=StatName.MOV,
-                operation=Operation.ADDITIVE,
-                value=1,
-                source=ModifierSource.ITEM,
-            )
-        ],
-    )
-    spiked_club = Item(
-        id="item.club.spiked",
-        name="Spiked Club",
-        mods=[
-            StatModifier(
-                stat=StatName.ATK,
-                operation=Operation.ADDITIVE,
-                value=2,
-                source=ModifierSource.ITEM,
-            )
-        ],
-    )
-    hide_shield = Item(
-        id="item.shield.hide",
-        name="Hide Shield",
-        mods=[
-            StatModifier(
-                stat=StatName.DEF,
-                operation=Operation.ADDITIVE,
-                value=1,
-                source=ModifierSource.ITEM,
-            )
-        ],
-    )
-
-    u1 = Unit(
-        id="u.player.1",
-        side=Side.PLAYER,
-        name="Hero",
-        pos=(1, 1),
-        stats=StatBlock(
-            base={
-                StatName.HP: 10,
-                StatName.AP: 2,
-                StatName.ATK: 3,
-                StatName.DEF: 2,
-                StatName.MOV: 4,
-                StatName.RNG: 1,
-                StatName.CRIT: 5,
-                StatName.INIT: 12,
-            }
         ),
-        items=[iron_sword, leather_armor],
-        injuries=[],
-        auras=[],  # add auras here if you like
-        skills=[passive_focus, active_shout],
-        ap_left=2,
-    )
-
-    u2 = Unit(
-        id="u.enemy.1",
-        side=Side.ENEMY,
-        name="Goblin",
-        pos=(6, 6),
-        stats=StatBlock(
-            base={
-                StatName.HP: 8,
-                StatName.AP: 2,
-                StatName.ATK: 2,
-                StatName.DEF: 1,
-                StatName.MOV: 3,
-                StatName.RNG: 1,
-                StatName.CRIT: 0,
-                StatName.INIT: 9,
-            }
-        ),
-        items=[spiked_club],
-        injuries=[],
-        auras=[],
-        skills=[],
-        ap_left=2,
-    )
-
-    # Extra units: one per side with unique items
-    u1b = Unit(
-        id="u.player.2",
-        side=Side.PLAYER,
-        name="Archer",
-        pos=(1, 2),
-        stats=StatBlock(
-            base={
-                StatName.HP: 9,
-                StatName.AP: 2,
-                StatName.ATK: 2,
-                StatName.DEF: 1,
-                StatName.MOV: 4,
-                StatName.RNG: 2,
-                StatName.CRIT: 5,
-                StatName.INIT: 14,
-            }
-        ),
-        items=[short_bow, light_boots],
-        injuries=[],
-        auras=[],
-        skills=[],
-        ap_left=2,
-    )
-    u2b = Unit(
-        id="u.enemy.2",
-        side=Side.ENEMY,
-        name="Orc",
-        pos=(6, 5),
-        stats=StatBlock(
-            base={
-                StatName.HP: 11,
-                StatName.AP: 2,
-                StatName.ATK: 3,
-                StatName.DEF: 2,
-                StatName.MOV: 3,
-                StatName.RNG: 1,
-                StatName.CRIT: 0,
-                StatName.INIT: 8,
-            }
-        ),
-        items=[hide_shield],
-        injuries=[],
-        auras=[],
-        skills=[],
-        ap_left=2,
-    )
+    }
 
     mission = Mission(
-        id="m.demo",
-        name="Bridge Clash",
+        id="mission.demo",
+        name="Demo Skirmish",
         map=grid,
-        units={u1.id: u1, u1b.id: u1b, u2.id: u2, u2b.id: u2b},
+        units=units,
         side_to_move=Side.PLAYER,
+        turn=1,
+        max_turns=20,
         goals=[MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)],
-        pre_events=[MissionEvent(id="e.start", text="Stop the goblin!")],
+        pre_events=[
+            MissionEvent(id="intro", text="Cross the river and defeat the goblins!")
+        ],
+        post_events=[],
+        global_mods=[],
+        initiative_order=[],
+        current_unit_id=None,
         enemy_ai=True,
     )
-
     return mission

@@ -27,6 +27,9 @@ class UseSkillAction(BaseModel):
     skill_id: str
     target_unit_id: str | None = None
     target_tile: tuple[int, int] | None = None
+    # Optional: custom AoE shape offsets centered on target tile (0,0 = center)
+    # Example: [(-1,-1),(-1,0),...,(1,1)] for a 3x3 square. If None, engine uses skill's default.
+    area_offsets: list[tuple[int, int]] | None = None
 
 
 class EndTurnAction(BaseModel):
