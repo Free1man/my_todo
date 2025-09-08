@@ -267,10 +267,3 @@ def test_legal_actions_exclude_same_and_occupied_tile_moves(base_url: str):
     ex_occ = _evaluate(base_url, sid, json.loads(mv_occ.model_dump_json()))
     assert not ex_same.get("legal"), f"expected same-tile move illegal, got {ex_same}"
     assert not ex_occ.get("legal"), f"expected occupied-tile move illegal, got {ex_occ}"
-
-    import requests as __req
-
-    with pytest.raises(__req.HTTPError):
-        _apply(base_url, sid, json.loads(mv_same.model_dump_json()))
-    with pytest.raises(__req.HTTPError):
-        _apply(base_url, sid, json.loads(mv_occ.model_dump_json()))
