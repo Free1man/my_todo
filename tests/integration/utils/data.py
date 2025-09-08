@@ -146,6 +146,7 @@ def hero_template() -> Unit:
         stats=StatBlock(
             base={
                 StatName.HP: 10,
+                StatName.MAX_HP: 10,
                 StatName.AP: 2,
                 StatName.ATK: 3,
                 StatName.DEF: 2,
@@ -169,6 +170,7 @@ def archer_template() -> Unit:
         stats=StatBlock(
             base={
                 StatName.HP: 9,
+                StatName.MAX_HP: 9,
                 StatName.AP: 2,
                 StatName.ATK: 2,
                 StatName.DEF: 1,
@@ -192,6 +194,7 @@ def goblin_template() -> Unit:
         stats=StatBlock(
             base={
                 StatName.HP: 8,
+                StatName.MAX_HP: 8,
                 StatName.AP: 2,
                 StatName.ATK: 2,
                 StatName.DEF: 1,

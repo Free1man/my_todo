@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import suppress
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -9,7 +8,7 @@ if TYPE_CHECKING:
 
 from ...models.enums import Side, StatName
 from . import stats
-from .effects import decay_temporary_mods, ensure_max_hp_tag
+from .effects import decay_temporary_mods
 
 
 def recompute_initiative_order(mission: Mission) -> None:
@@ -75,9 +74,6 @@ def end_turn(mission: Mission) -> None:
 def initialize_mission(mission: Mission) -> None:
     requested_cursor = mission.current_unit_id
     recompute_initiative_order(mission)
-    for u in mission.units.values():
-        with suppress(Exception):
-            ensure_max_hp_tag(u)
     if requested_cursor and requested_cursor in mission.initiative_order:
         idx = mission.initiative_order.index(requested_cursor)
         mission.initiative_order = (

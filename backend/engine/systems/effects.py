@@ -6,20 +6,12 @@ if TYPE_CHECKING:
     from ...models.modifiers import StatModifier
     from ...models.units import Unit
 
-from ...models.enums import StatName
-
 
 def add_temp_mods(u: Unit, mods: list[StatModifier]) -> None:
     """Attach temporary modifiers to a unit; these decay via decay_temporary_mods."""
     if not mods:
         return
     u.temp_mods.extend(mods)
-
-
-def ensure_max_hp_tag(unit: Unit) -> None:
-    """Ensure the MAX_HP stat exists; initialize to current base HP if missing."""
-    if StatName.MAX_HP not in unit.stats.base:
-        unit.stats.base[StatName.MAX_HP] = unit.stats.base.get(StatName.HP, 0)
 
 
 def decay_temporary_mods(u: Unit) -> None:
