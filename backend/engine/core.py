@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from backend.engine.systems import victory
+
 if TYPE_CHECKING:
     from ..models.session import TBSSession
     from .actions.base import Registry
@@ -110,6 +112,4 @@ class TBSEngine:
         turn.initialize_mission(mission)
 
     def check_victory_conditions(self, sess):
-        from .systems import victory
-
         return victory.check(sess)

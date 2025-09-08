@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from ...models.modifiers import StatModifier
     from ...models.units import Unit
 
-from ...models.api import UseSkillAction
+from ...models.api import LegalAction, UseSkillAction
 from ...models.enums import ActionLogResult, Operation, SkillTarget, StatName
 from ...models.session import TBSSession
 from ..logging.logger import log_event
@@ -169,8 +169,6 @@ class SkillHandler(ActionHandler):
 
 
 def enumerate_legal(mission, u: Unit, handlers, explain: bool):
-    from ...models.api import LegalAction, UseSkillAction
-
     out: list[LegalAction] = []
     for s in u.skills:
         if u.ap_left < s.ap_cost:
