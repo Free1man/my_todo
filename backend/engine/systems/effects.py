@@ -7,16 +7,9 @@ if TYPE_CHECKING:
     from ...models.units import Unit
 
 
-def add_temp_mods(u: Unit, mods: list[StatModifier]) -> None:
-    """Attach temporary modifiers to a unit; these decay via decay_temporary_mods."""
-    if not mods:
-        return
-    u.temp_mods.extend(mods)
-
-
 def decay_temporary_mods(u: Unit) -> None:
     """Reduce duration_turns on temp_mods; drop expired; keep None (permanent) and >1 (decremented)."""
-    if not getattr(u, "temp_mods", None):
+    if not u.temp_mods:
         u.temp_mods = []
         return
     new_mods: list[StatModifier] = []

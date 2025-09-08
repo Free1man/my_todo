@@ -11,7 +11,6 @@ from ...models.enums import ActionLogResult, Operation, SkillTarget, StatName
 from ...models.session import TBSSession
 from ..logging.logger import log_event
 from ..systems import pathfinding, stats
-from ..systems.effects import add_temp_mods
 from .base import ActionHandler
 
 
@@ -140,7 +139,7 @@ class SkillHandler(ActionHandler):
                             continue
                         temp_mods.append(m)
                     if temp_mods:
-                        add_temp_mods(t, temp_mods)
+                        t.temp_mods.extend(temp_mods)
         else:
             target_unit = u
             if (
@@ -163,7 +162,7 @@ class SkillHandler(ActionHandler):
                     temp_mods.append(m)
             _apply_hp_with_cap(target_unit, hp_add, hp_override)
             if temp_mods:
-                add_temp_mods(target_unit, temp_mods)
+                target_unit.temp_mods.extend(temp_mods)
 
         log_event(sess, action, ActionLogResult.APPLIED)
         return TBSSession(id=sess.id, mission=mission)
