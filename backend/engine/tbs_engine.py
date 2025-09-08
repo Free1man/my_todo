@@ -53,8 +53,11 @@ class TBSEngine:
         mission = sess.mission
         if isinstance(action, MoveAction):
             u = mission.units[action.unit_id]
-            u.pos = action.to
-            u.ap_left -= 1
+            if action.to == u.pos:
+                pass
+            elif not self._occupied(mission, action.to):
+                u.pos = action.to
+                u.ap_left -= 1
 
         elif isinstance(action, AttackAction):
             atk = mission.units[action.attacker_id]
@@ -375,6 +378,19 @@ class TBSEngine:
                 return False, "unit cannot act"
             if u.ap_left < 1:
                 return False, "no AP left"
+            # Quick local checks for clarity of explanation
+            if action.to == u.pos:
+                return False, "already at destination"
+            if not mission.map.in_bounds(action.to):
+                return False, "destination out of bounds"
+            if not mission.map.tile(action.to).walkable:
+                return False, "destination not walkable"
+            # Cannot move onto a tile occupied by another living unit
+            if any(
+                other.alive and other.id != u.id and other.pos == action.to
+                for other in mission.units.values()
+            ):
+                return False, "destination occupied"
             path_ok = self._can_reach(mission, u, action.to)
             return (True, "ok") if path_ok else (False, "cannot reach")
 

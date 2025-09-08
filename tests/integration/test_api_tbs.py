@@ -4,7 +4,7 @@ import json
 import pytest
 import requests
 import requests as _requests
-from backend.models.api import AttackAction
+from backend.models.api import AttackAction, MoveAction
 from backend.models.enums import StatName
 from tests.integration.utils.data import (
     archer_template,
@@ -222,3 +222,55 @@ def test_initiative_and_turn_order(base_url: str):
     sess = _apply(base_url, sid, end_turn_action)
     assert sess["mission"]["turn"] == 2
     assert sess["mission"]["current_unit_id"] == "unit_fast"
+
+
+def test_legal_actions_exclude_same_and_occupied_tile_moves(base_url: str):
+    # Setup: two units adjacent; hero should be the one to act
+    hero = hero_template()
+    hero.stats.base[StatName.INIT] = 100
+    hero.pos = (1, 1)
+    goblin = goblin_template()
+    goblin.pos = (1, 2)
+
+    mission = simple_mission([hero, goblin])
+    mission.current_unit_id = hero.id
+
+    sid, sess = _create_tbs_session(base_url, mission)
+
+    # Fetch legal actions and filter to hero's move actions
+    la = _requests.get(f"{base_url}/sessions/{sid}/legal_actions", timeout=5)
+    la.raise_for_status()
+    acts = la.json()["actions"]
+    move_acts = [
+        a.get("action")
+        for a in acts
+        if a.get("action", {}).get("kind") == "move"
+        and a.get("action", {}).get("unit_id") == hero.id
+    ]
+
+    # Server state positions
+    cur_pos = sess["mission"]["units"][hero.id]["pos"]
+    occ_pos = sess["mission"]["units"][goblin.id]["pos"]
+
+    # Ensure neither staying put nor stepping onto the occupied tile is listed
+    assert all(
+        m.get("to") != cur_pos for m in move_acts
+    ), "move to same tile must not be listed"
+    assert all(
+        m.get("to") != occ_pos for m in move_acts
+    ), "move to occupied tile must not be listed"
+
+    # Also verify evaluate/apply reject these moves explicitly
+    mv_same = MoveAction(unit_id=hero.id, to=tuple(cur_pos))
+    mv_occ = MoveAction(unit_id=hero.id, to=tuple(occ_pos))
+    ex_same = _evaluate(base_url, sid, json.loads(mv_same.model_dump_json()))
+    ex_occ = _evaluate(base_url, sid, json.loads(mv_occ.model_dump_json()))
+    assert not ex_same.get("legal"), f"expected same-tile move illegal, got {ex_same}"
+    assert not ex_occ.get("legal"), f"expected occupied-tile move illegal, got {ex_occ}"
+
+    import requests as __req
+
+    with pytest.raises(__req.HTTPError):
+        _apply(base_url, sid, json.loads(mv_same.model_dump_json()))
+    with pytest.raises(__req.HTTPError):
+        _apply(base_url, sid, json.loads(mv_occ.model_dump_json()))
