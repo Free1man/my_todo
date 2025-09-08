@@ -217,4 +217,69 @@
   global.render = function() {
   global.requestRender();
   };
+
+  // --- Skill targeting helpers ---
+  global.SKILL_TARGETING = null; // { unitId, skillId }
+  global.SKILL_TARGETS = null;   // { tiles: Set<string>, units: Set<string> }
+
+  global.startSkillTargeting = async function(unitId, skillId) {
+    if (!global.SID || !global.STATE) return;
+    global.SKILL_TARGETING = { unitId, skillId };
+    const tiles = new Set();
+    const units = new Set();
+  // Resolve skill details for fallback targeting ranges
+  const unit = global.STATE.units[unitId];
+  const skill = unit && Array.isArray(unit.skills) ? unit.skills.find(s => s && s.id === skillId) : null;
+  const range = Number(skill?.range ?? 0);
+  const targetKind = String(skill?.target || 'none');
+    try {
+      const res = await global.api(`/sessions/${global.SID}/legal_actions?explain=true`);
+      const actions = Array.isArray(res?.actions) ? res.actions : [];
+      for (const entry of actions) {
+        const a = entry.action || entry;
+        if (a.kind !== 'use_skill') continue;
+        if (a.unit_id !== unitId) continue;
+        if (a.skill_id !== skillId) continue;
+        if (Array.isArray(a.target_tile)) {
+          tiles.add(`${a.target_tile[0]},${a.target_tile[1]}`);
+        }
+        if (a.target_unit_id) {
+          const u = global.STATE.units[a.target_unit_id];
+          if (u && Array.isArray(u.pos)) {
+            units.add(a.target_unit_id);
+            tiles.add(`${u.pos[0]},${u.pos[1]}`);
+          }
+        }
+      }
+      // Fallback for TILE-targeted skills: allow any in-range tile (including empty)
+      if (targetKind === 'tile') {
+        const pos = Array.isArray(unit?.pos) ? unit.pos : [0, 0];
+        const H = global.STATE.map?.height ?? 0;
+        const W = global.STATE.map?.width ?? 0;
+        if (range <= 0) {
+          tiles.add(`${pos[0]},${pos[1]}`);
+        } else {
+          for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+              const d = Math.abs(x - pos[0]) + Math.abs(y - pos[1]);
+              if (d <= range) tiles.add(`${x},${y}`);
+            }
+          }
+        }
+      }
+      global.SKILL_TARGETS = { tiles, units };
+      global.log(`Targeting ${skillId}: ${units.size} unit(s), ${tiles.size} tile(s)`);
+    } catch (e) {
+      global.log(`Error loading skill targets: ${e.message}`, 'error');
+      global.SKILL_TARGETING = null;
+      global.SKILL_TARGETS = null;
+    }
+    global.requestRender();
+  };
+
+  global.endSkillTargeting = function() {
+    global.SKILL_TARGETING = null;
+    global.SKILL_TARGETS = null;
+    global.requestRender();
+  };
 })(window);

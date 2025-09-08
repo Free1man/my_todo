@@ -9,7 +9,7 @@
       const gridEl = document.getElementById('grid');
       if (!gridEl || !state) return;
       const map = state.map;
-    if (!map || !map.width || !map.height) return;
+  if (!map || !map.width || !map.height) return;
       gridEl.style.gridTemplateColumns = `repeat(${map.width}, 32px)`;
       gridEl.style.gridTemplateRows = `repeat(${map.height}, 32px)`;
       gridEl.innerHTML = '';
@@ -32,6 +32,17 @@
       <div>ap: ${ap}</div>
     </div>`;
             dot.onclick = async (e) => {
+              // Skill targeting takes precedence
+              if (window.SKILL_TARGETING && window.SKILL_TARGETS && window.SKILL_TARGETS.units?.has(unit.id)) {
+                const { unitId, skillId } = window.SKILL_TARGETING;
+                await window.attemptAction({ kind: 'use_skill', unit_id: unitId, skill_id: skillId, target_unit_id: unit.id });
+                window.endSkillTargeting();
+                return;
+              }
+              // If in targeting but clicked an invalid unit, cancel
+              if (window.SKILL_TARGETING) {
+                window.endSkillTargeting();
+              }
               if (unit.side !== (state.current_unit_id ? state.units[state.current_unit_id]?.side : null)) {
                 const acting = state.units[state.current_unit_id];
                 if (acting) {
@@ -64,6 +75,12 @@
             ring.className = 'ring';
             tile.appendChild(ring);
           }
+          // Skill targeting highlights
+          if (window.SKILL_TARGETS && window.SKILL_TARGETS.tiles && window.SKILL_TARGETS.tiles.has(`${x},${y}`)) {
+            const ring = document.createElement('div');
+            ring.className = 'ring';
+            tile.appendChild(ring);
+          }
           // Selection
           if (selected && state.units[selected] && state.units[selected].pos[0] === x && state.units[selected].pos[1] === y) {
             tile.classList.add('selected');
@@ -72,8 +89,22 @@
             tile.classList.add('current');
           }
           // Click for move
-          tile.onclick = () => {
-            if (!global.SID || !selected) return;
+      tile.onclick = () => {
+            if (!global.SID) return;
+            // If in skill targeting mode and tile is valid
+            if (window.SKILL_TARGETING) {
+              const key = `${x},${y}`;
+              const { unitId, skillId } = window.SKILL_TARGETING;
+              if (window.SKILL_TARGETS && window.SKILL_TARGETS.tiles && window.SKILL_TARGETS.tiles.has(key)) {
+                global.attemptAction({ kind: 'use_skill', unit_id: unitId, skill_id: skillId, target_tile: [x, y] });
+                window.endSkillTargeting();
+                return;
+              }
+        // Clicked somewhere else: cancel targeting
+        window.endSkillTargeting();
+        return;
+            }
+            if (!selected) return;
             const to = [x, y];
             const selectedUnit = state.units[selected];
             const isCurrentSel = state.current_unit_id === selectedUnit.id;

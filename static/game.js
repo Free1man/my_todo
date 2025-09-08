@@ -68,7 +68,15 @@
         return lines.join('\n');
       };
       const itemsHtml = items.length ? items.map(it => `<span class="chip" title="${esc(itemTitle(it))}">${esc((it && it.name) || 'Item')}</span>`).join('') : '<span style="color:#777;">None</span>';
-      const skillsHtml = skills.length ? skills.map(s => `<span class="chip" title="${(s && s.name) || 'Skill'}">${(s && s.name) || 'Skill'}</span>`).join('') : '<span style="color:#777;">None</span>';
+      const skillsHtml = skills.length
+        ? skills.map(s => {
+            const ap = Number(s?.ap_cost ?? 0);
+            const rng = Number(s?.range ?? 0);
+            const tgt = String(s?.target || 'none');
+            const tip = `${s?.name || 'Skill'}\nAP: ${ap}  RNG: ${rng}  Target: ${tgt}`;
+            return `<button class="action-btn" data-skill-id="${esc(s.id)}" title="${esc(tip)}">${esc(s.name || s.id)}</button>`;
+          }).join('')
+        : '<span style="color:#777;">None</span>';
       const attackEntries = (legalActions || []).filter(e => e?.action?.kind === 'attack' && e.action.attacker_id === u.id);
       const attacksHtml = attackEntries.length ? attackEntries.map(e => {
         const tgt = state.units[e.action.target_id];
@@ -104,6 +112,31 @@
           const target = btn.getAttribute('data-tgt');
           if (!attacker || !target) return;
           await global.attemptAction({ kind: 'attack', attacker_id: attacker, target_id: target });
+        };
+      });
+      // Wire skill buttons
+      document.querySelectorAll('#active-unit .action-btn[data-skill-id]').forEach(btn => {
+        btn.onclick = async () => {
+          const sid = btn.getAttribute('data-skill-id');
+          if (!sid) return;
+          // Determine the skill from current unit
+          const skill = (skills || []).find(s => s && s.id === sid);
+          if (!skill) return;
+          // Toggle off if already targeting this skill on this unit
+          if (window.SKILL_TARGETING && window.SKILL_TARGETING.unitId === u.id && window.SKILL_TARGETING.skillId === sid) {
+            window.endSkillTargeting();
+            return;
+          }
+          const target = String(skill.target || 'none');
+          // Self or none-target skills: apply immediately
+          if (target === 'self' || target === 'none') {
+            const action = { kind: 'use_skill', unit_id: u.id, skill_id: skill.id };
+            if (target === 'self') action.target_unit_id = u.id;
+            await global.attemptAction(action);
+            return;
+          }
+          // Otherwise enter targeting mode and highlight legal tiles/units
+          await global.startSkillTargeting(u.id, skill.id);
         };
       });
     },
