@@ -44,6 +44,8 @@ def eff_stat_with_trace(mission: Mission, u: Unit, stat: StatName) -> EffStat:
         all_mods.extend(inj.mods)
     for a in u.auras:
         all_mods.extend(a.mods)
+    # Temporary modifiers applied by skills
+    all_mods.extend(u.temp_mods)
     for other in mission.units.values():
         if not other.alive or other.id == u.id:
             continue
@@ -138,6 +140,8 @@ def eff_stat(mission: Mission, u: Unit, stat: StatName) -> int:
         all_mods.extend(inj.mods)
     for a in u.auras:
         all_mods.extend(a.mods)
+    # Temporary modifiers applied by skills
+    all_mods.extend(u.temp_mods)
     for other in mission.units.values():
         if not other.alive or other.id == u.id:
             continue

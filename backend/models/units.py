@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 from .enums import Coord, Side, StatName
-from .modifiers import StatBlock
+from .modifiers import StatBlock, StatModifier
 from .skills import Aura, Injury, Item, Skill
 
 
@@ -26,6 +26,8 @@ class Unit(BaseModel):
     )
     items: list[Item] = Field(default_factory=list)
     injuries: list[Injury] = Field(default_factory=list)
+    # Temporary buffs/debuffs applied by skills; decays each turn via engine.effects
+    temp_mods: list[StatModifier] = Field(default_factory=list)
     auras: list[Aura] = Field(default_factory=list)
     skills: list[Skill] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
