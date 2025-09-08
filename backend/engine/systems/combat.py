@@ -39,6 +39,8 @@ def apply_attack(mission: Mission, atk: Unit, tgt: Unit) -> int:
     dmg = compute_damage(mission, atk, tgt)
     hp = stats.eff_stat(mission, tgt, StatName.HP)
     hp -= max(dmg, 1)
+    max_hp_cap = stats.eff_stat(mission, tgt, StatName.MAX_HP)
+    hp = min(hp, max_hp_cap)
     tgt.stats.base[StatName.HP] = max(hp, 0)
     tgt.alive = tgt.stats.base[StatName.HP] > 0
     return dmg

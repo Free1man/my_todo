@@ -10,8 +10,8 @@ from ...models.api import UseSkillAction
 from ...models.enums import ActionLogResult, Operation, SkillTarget, StatName
 from ...models.session import TBSSession
 from ..logging.logger import log_event
-from ..systems import pathfinding
-from ..systems.effects import add_temp_mods, read_max_hp_tag
+from ..systems import pathfinding, stats
+from ..systems.effects import add_temp_mods
 from .base import ActionHandler
 
 
@@ -78,18 +78,16 @@ class SkillHandler(ActionHandler):
         def _apply_hp_with_cap(
             target_unit: Unit, delta: int | None, override: int | None = None
         ):
-            max_hp_cap = read_max_hp_tag(target_unit)
+            max_hp_cap = stats.eff_stat(mission, target_unit, StatName.MAX_HP)
             if delta is not None:
                 cur = target_unit.stats.base.get(StatName.HP, 0)
                 new_hp = cur + delta
-                if max_hp_cap is not None:
-                    new_hp = min(max_hp_cap, new_hp)
+                new_hp = min(max_hp_cap, new_hp)
                 target_unit.stats.base[StatName.HP] = max(0, new_hp)
                 target_unit.alive = target_unit.stats.base[StatName.HP] > 0
             if override is not None:
                 val = override
-                if max_hp_cap is not None:
-                    val = min(max_hp_cap, val)
+                val = min(max_hp_cap, val)
                 target_unit.stats.base[StatName.HP] = max(0, val)
                 target_unit.alive = target_unit.stats.base[StatName.HP] > 0
 

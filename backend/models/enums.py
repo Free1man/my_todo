@@ -19,6 +19,7 @@ class Terrain(str, Enum):
 
 class StatName(str, Enum):
     HP = "hp"
+    MAX_HP = "max_hp"
     AP = "ap"
     ATK = "atk"
     DEF = "def"

@@ -16,20 +16,10 @@ def add_temp_mods(u: Unit, mods: list[StatModifier]) -> None:
     u.temp_mods.extend(mods)
 
 
-def read_max_hp_tag(unit: Unit) -> int | None:
-    for tag in unit.tags:
-        if isinstance(tag, str) and tag.startswith("MAX_HP="):
-            try:
-                return int(tag.split("=", 1)[1])
-            except Exception:
-                return None
-    return None
-
-
 def ensure_max_hp_tag(unit: Unit) -> None:
-    if not any(isinstance(t, str) and t.startswith("MAX_HP=") for t in unit.tags):
-        base_hp = unit.stats.base.get(StatName.HP, 0)
-        unit.tags.append(f"MAX_HP={base_hp}")
+    """Ensure the MAX_HP stat exists; initialize to current base HP if missing."""
+    if StatName.MAX_HP not in unit.stats.base:
+        unit.stats.base[StatName.MAX_HP] = unit.stats.base.get(StatName.HP, 0)
 
 
 def decay_temporary_mods(u: Unit) -> None:

@@ -87,7 +87,9 @@ def _score_attack(
     # Avoid attacking same-side units for now
     if atk and tgt and atk.side == tgt.side:
         return float("-1e9")
-    tgt_hp = float(tgt.stats.base.get(StatName.HP, 0)) if tgt else 0.0
+    from .systems import stats as _stats
+
+    tgt_hp = float(_stats.eff_stat(mission, tgt, StatName.HP)) if tgt else 0.0
     lethal_bonus = w.lethal if expected >= tgt_hp and tgt_hp > 0 else 0.0
 
     score = lethal_bonus + w.dmg_per_ap * (expected / ap_cost)

@@ -14,6 +14,7 @@ class Unit(BaseModel):
         default_factory=lambda: StatBlock(
             base={
                 StatName.HP: 10,
+                StatName.MAX_HP: 10,
                 StatName.AP: 2,
                 StatName.ATK: 3,
                 StatName.DEF: 1,
