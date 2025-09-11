@@ -112,9 +112,21 @@ def base_url() -> Iterator[str]:
     port = _get_free_port()
     env = os.environ.copy()
     env["PORT"] = str(port)
-    up_cmd = ["docker", "compose", "up", "-d", "--build", "--wait"]
+    # Build and start only the API and its dependencies to avoid building unrelated services
+    up_cmd = [
+        "docker",
+        "compose",
+        "up",
+        "-d",
+        "--build",
+        "--wait",
+        "api",
+        "redis",
+    ]
     logger.info(
-        "[tests] Starting docker compose on PORT=%s: %s", port, " ".join(up_cmd)
+        "[tests] Starting docker compose (api, redis) on PORT=%s: %s",
+        port,
+        " ".join(up_cmd),
     )
     up_proc = subprocess.run(
         up_cmd,
