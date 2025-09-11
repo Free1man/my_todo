@@ -50,6 +50,9 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    environment:
+      # What the EXPORTED binary should use by default on your host
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
     volumes:
       - ./dist/godot_csharp:/out
       # Bind mount the project so code changes don't require image rebuilds

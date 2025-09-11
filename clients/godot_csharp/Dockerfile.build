@@ -70,5 +70,9 @@ ENTRYPOINT bash -lc '\
     godot --headless --path /game --export-release "Windows" "/out/windows/TBS-Minimal.exe" --quit; \
   fi; \
   ls -lah /out/windows || true; \
-  echo; echo "=== Done ==="; \
+    echo; echo "=== Write tbs_config.json ==="; \
+    BASE="${PUBLIC_API_URL:-http://localhost:8000}"; \
+    printf '{ "base_url": "%s", "sessions_path": "/sessions" }\n' "$BASE" | tee /out/linux/tbs_config.json >/dev/null; \
+    cp /out/linux/tbs_config.json /out/windows/tbs_config.json; \
+    echo; echo "=== Done ==="; \
 '
