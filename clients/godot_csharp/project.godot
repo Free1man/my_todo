@@ -1,0 +1,9 @@
+; Godot 4 C# minimal client project
+config_version=5
+
+[application]
+config/name="TBS Minimal"
+run/main_scene="res://Main.tscn"
+
+[dotnet]
+project/assembly_name="TbsClient"

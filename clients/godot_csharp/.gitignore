@@ -1,0 +1,25 @@
+.mono/
+.godot/
+bin/
+obj/
+build/
+
+# Godot export outputs (on host)
+/out/
+/export/
+/exports/
+
+# Local environment/user files
+*.user
+*.suo
+*.tmp
+*.lock
+*.bak
+*.swp
+*.sln.docstates
+
+# Godot import cache (already inside .godot, but keep explicit)
+*.import
+
+# Godot editor UID cache files (generated, not for VCS)
+*.uid

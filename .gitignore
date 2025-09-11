@@ -5,3 +5,27 @@ __pycache__/
 
 # Virtual environment
 .venv/
+
+# Build outputs
+dist/
+build/
+
+# Test/coverage caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.cache/
+
+# Logs
+*.log
+
+# Editor/IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS/filesystem noise
+.DS_Store
+Thumbs.db

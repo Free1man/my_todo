@@ -26,20 +26,40 @@ services:
       EVICT_ON_GET: true
     depends_on:
       - redis
-    # Dev bind mount (uncommented); use ':cached' only on Docker Desktop/macOS
     volumes:
       - ./:/app
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health || exit 1"]
-      interval: 2s
-      timeout: 1s
-      retries: 60
-      start_period: 2s
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
     restart: unless-stopped
-    # Run with auto-reload only when PROD is false
     command: >
       bash -lc 'if [ "${PROD:-true}" = "false" ]; then
         uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload;
       else
         uvicorn backend.app:app --host 0.0.0.0 --port 8000;
       fi'
+
+  godot-cs-build:
+    build:
+      context: ./clients/godot_csharp
+      dockerfile: Dockerfile.build
+      args:
+        GODOT_VER: "4.4.1"
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./dist/godot_csharp:/out
+      # Bind mount the project so code changes don't require image rebuilds
+      - ./clients/godot_csharp:/game
+      # Persist the downloaded Godot editor and export templates across runs
+      - godot-sdk:/opt/Godot_v4.4.1-stable_mono_linux_x86_64
+      - godot-templates:/root/.local/share/godot/export_templates/4.4.1.stable.mono
+    working_dir: /game
+    command: ""
+
+volumes:
+  godot-sdk:
+  godot-templates:

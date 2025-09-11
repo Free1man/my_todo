@@ -1,0 +1,74 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim
+
+# --- Versions / names ---
+ARG GODOT_VER=4.4.1
+ARG GODOT_REL=${GODOT_VER}-stable           # 4.4.1-stable
+ARG GODOT_REL_DOTS=${GODOT_VER}.stable      # 4.4.1.stable
+ARG GODOT_ZIP=Godot_v${GODOT_REL}_mono_linux_x86_64.zip
+ARG GODOT_TPZ=Godot_v${GODOT_REL}_mono_export_templates.tpz
+ARG GODOT_DIR=Godot_v${GODOT_REL}_mono_linux_x86_64
+ARG GODOT_BIN=${GODOT_DIR}/Godot_v${GODOT_REL}_mono_linux.x86_64
+
+# Expose for runtime self-heal
+ENV GODOT_VER=${GODOT_VER} GODOT_REL=${GODOT_REL} GODOT_REL_DOTS=${GODOT_REL_DOTS} GODOT_TPZ=${GODOT_TPZ}
+
+# --- Minimal deps ---
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl unzip ca-certificates \
+      libx11-6 libxcursor1 libxrandr2 libxi6 libgl1 libasound2 libfontconfig1 \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+# --- Godot .NET editor (GitHub) ---
+RUN curl -fSL -o "/tmp/${GODOT_ZIP}" \
+      "https://github.com/godotengine/godot/releases/download/${GODOT_REL}/${GODOT_ZIP}" \
+ && unzip -q "/tmp/${GODOT_ZIP}" -d /opt && rm -f "/tmp/${GODOT_ZIP}" \
+ && chmod +x "/opt/${GODOT_BIN}" && ln -sf "/opt/${GODOT_BIN}" /usr/local/bin/godot
+
+# --- Export templates (flatten inner 'templates/' if present) ---
+RUN curl -fSL -o "/tmp/${GODOT_TPZ}" \
+      "https://github.com/godotengine/godot/releases/download/${GODOT_REL}/${GODOT_TPZ}" \
+ && TDIR="/root/.local/share/godot/export_templates/${GODOT_REL_DOTS}.mono" \
+ && mkdir -p "$TDIR" \
+ && unzip -q "/tmp/${GODOT_TPZ}" -d "$TDIR" && rm -f "/tmp/${GODOT_TPZ}" \
+ && if [ -d "$TDIR/templates" ]; then mv "$TDIR/templates/"* "$TDIR/" && rmdir "$TDIR/templates"; fi \
+ && ls -lah "$TDIR" \
+ && test -f "$TDIR/linux_release.x86_64" && test -f "$TDIR/linux_debug.x86_64"
+
+# --- Bind-mount project at runtime; no COPY here ---
+WORKDIR /game
+
+# --- ENTRYPOINT: build & export; fix templates and retry on failure ---
+ENTRYPOINT bash -lc '\
+  set -e; \
+  TDIR="/root/.local/share/godot/export_templates/${GODOT_REL_DOTS}.mono"; \
+  fix_templates(){ \
+    if [ -d "$TDIR/templates" ]; then \
+      echo "[templates] flattening $TDIR/templates -> $TDIR"; \
+      shopt -s dotglob; mv "$TDIR/templates"/* "$TDIR"/; rmdir "$TDIR/templates" || true; \
+    fi; \
+    ls -lah "$TDIR" || true; \
+  }; \
+  echo; echo "=== Godot ==="; godot --version || true; \
+  echo; echo "=== .NET (short) ==="; dotnet --info | sed -n "1,30p"; \
+  echo; echo "=== Import (best-effort) ==="; godot --headless --path /game --import --quit || true; \
+  echo; echo "=== dotnet restore ==="; dotnet restore /game/TbsClient.csproj; \
+  echo; echo "=== dotnet build (Release) ==="; dotnet build /game/TbsClient.csproj -c Release -v minimal; \
+  echo; echo "=== godot build-solutions (best-effort) ==="; godot --headless --path /game --build-solutions --quit || true; \
+  echo; echo "=== Ensure templates present at $TDIR ==="; fix_templates; \
+  mkdir -p /out/linux /out/windows; \
+  echo; echo "=== Export Linux (1st try) ==="; \
+  if ! godot --headless --path /game --export-release "Linux" "/out/linux/TBS-Minimal.x86_64" --quit; then \
+    echo "[export] first try failed; normalizing templates and retrying..."; fix_templates; \
+    godot --headless --path /game --export-release "Linux" "/out/linux/TBS-Minimal.x86_64" --quit; \
+  fi; \
+  ls -lah /out/linux || true; \
+  echo; echo "=== Export Windows (1st try) ==="; \
+  if ! godot --headless --path /game --export-release "Windows" "/out/windows/TBS-Minimal.exe" --quit; then \
+    echo "[export] first try failed; normalizing templates and retrying..."; fix_templates; \
+    godot --headless --path /game --export-release "Windows" "/out/windows/TBS-Minimal.exe" --quit; \
+  fi; \
+  ls -lah /out/windows || true; \
+  echo; echo "=== Done ==="; \
+'
