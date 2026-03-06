@@ -10,21 +10,19 @@ from ...models.enums import GoalKind, MissionStatus, Side
 
 def check(sess: TBSSession) -> MissionStatus:
     mission = sess.mission
-    if mission.status != MissionStatus.IN_PROGRESS:
-        return mission.status
+    if mission.turn_state.status != MissionStatus.IN_PROGRESS:
+        return mission.turn_state.status
 
     for goal in mission.goals:
         if goal.kind == GoalKind.ELIMINATE_ALL_ENEMIES:
-            if not any(
-                u.alive and u.side == Side.ENEMY for u in mission.units.values()
-            ):
+            if not mission.living_units_for(Side.ENEMY):
                 return MissionStatus.VICTORY
-        elif goal.kind == GoalKind.SURVIVE_TURNS and mission.turn >= (
+        elif goal.kind == GoalKind.SURVIVE_TURNS and mission.turn_state.turn >= (
             goal.survive_turns or 0
         ):
             return MissionStatus.VICTORY
 
-    if not any(u.alive and u.side == Side.PLAYER for u in mission.units.values()):
+    if not mission.living_units_for(Side.PLAYER):
         return MissionStatus.DEFEAT
 
     return MissionStatus.IN_PROGRESS

@@ -10,13 +10,44 @@
   // Client-side logging removed; rely on server-side log endpoint
   global.log = function() {};
 
+  global.turnState = (state) => state?.turn_state || {};
+  global.turnNumber = (state) => global.turnState(state).turn ?? null;
+  global.sideToMove = (state) => global.turnState(state).side_to_move ?? null;
+  global.currentUnitId = (state) => global.turnState(state).current_unit_id || null;
+  global.initiativeOrder = (state) => {
+    const order = global.turnState(state).initiative_order;
+    return Array.isArray(order) ? order : [];
+  };
+  global.unitTemplate = (u) => u?.template || {};
+  global.unitState = (u) => u?.state || {};
+  global.unitBaseStats = (u) => global.unitTemplate(u).stats?.base || {};
+  global.unitPos = (u) => {
+    const pos = global.unitState(u).pos;
+    return Array.isArray(pos) ? pos : [0, 0];
+  };
+  global.unitAlive = (u) => Boolean(global.unitState(u).alive);
+  global.unitApLeft = (u) => Number(global.unitState(u).ap_left ?? 0);
+  global.unitSide = (u) => String(global.unitTemplate(u).side || '');
+  global.unitName = (u) => String(global.unitTemplate(u).name || '');
+  global.unitItems = (u) => {
+    const items = global.unitTemplate(u).items;
+    return Array.isArray(items) ? items : [];
+  };
+  global.unitSkills = (u) => {
+    const skills = global.unitTemplate(u).skills;
+    return Array.isArray(skills) ? skills : [];
+  };
+
   global.getUnit = (id) => (global.STATE && id ? global.STATE.units[id] : null);
   global.tileKey = (x, y) => `${x},${y}`;
   global.manh = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
   global.inBounds = (x, y) => global.STATE && 0 <= x && x < global.STATE.map.width && 0 <= y && y < global.STATE.map.height;
   global.terrainAt = (x, y) => (global.STATE.map.tiles[y][x]?.terrain || 'plain').toLowerCase();
   global.isWalkable = (x, y) => { const t = global.terrainAt(x, y); return !(t === 'blocked' || t === 'water'); };
-  global.isOccupied = (x, y) => Object.values(global.STATE.units).some(u => u.alive && u.pos[0] === x && u.pos[1] === y);
+  global.isOccupied = (x, y) => Object.values(global.STATE.units).some(u => {
+    const pos = global.unitPos(u);
+    return global.unitAlive(u) && pos[0] === x && pos[1] === y;
+  });
   global.neighbors = (x, y) => [[x+1,y],[x-1,y],[x,y+1],[x,y-1]].filter(([nx, ny]) => global.inBounds(nx, ny));
   global.clearHints = () => { global.MOVE_HINTS.clear(); global.ATTACK_HINTS.clear(); };
 
@@ -59,7 +90,7 @@
       const res = await global.api('/sessions', { method: 'POST', body: JSON.stringify({}) });
       global.SID = res.id;
       global.STATE = res.mission;
-      global.SELECTED = global.STATE.current_unit_id || null;
+      global.SELECTED = global.currentUnitId(global.STATE);
       global.PREVIEW_UNIT = null;
       global.LEGAL_ACTIONS = [];
       global.updateUI();
@@ -89,7 +120,7 @@
     try {
       const res = await global.api(`/sessions/${global.SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
       global.STATE = res.session.mission;
-      global.SELECTED = global.STATE.current_unit_id || null;
+      global.SELECTED = global.currentUnitId(global.STATE);
       global.PREVIEW_UNIT = null;
       global.LEGAL_ACTIONS = [];
       await global.fetchLegalAndComputeHints();
@@ -109,7 +140,7 @@
       const sess = await global.api(`/sessions/${id}`);
       global.SID = sess.id;
       global.STATE = sess.mission;
-      global.SELECTED = sess.mission.current_unit_id || null;
+      global.SELECTED = global.currentUnitId(sess.mission);
       global.PREVIEW_UNIT = null;
       global.LEGAL_ACTIONS = [];
       await global.fetchLegalAndComputeHints();
@@ -131,7 +162,7 @@
     try {
       const res = await global.api(`/sessions/${global.SID}/action`, { method: 'POST', body: JSON.stringify({ action }) });
       global.STATE = res.session.mission;
-      global.SELECTED = global.STATE.current_unit_id || null;
+      global.SELECTED = global.currentUnitId(global.STATE);
       global.PREVIEW_UNIT = null;
       await global.fetchLegalAndComputeHints();
       global.updateUI();
@@ -157,12 +188,12 @@
     global.ATTACK_HINTS.clear();
     if (!global.SID || !global.STATE) return;
 
-    const targetId = global.PREVIEW_UNIT || global.SELECTED || global.STATE.current_unit_id;
+    const targetId = global.PREVIEW_UNIT || global.SELECTED || global.currentUnitId(global.STATE);
     if (!targetId) return;
     const sel = global.STATE.units[targetId];
     if (!sel) return;
 
-    if (global.STATE.current_unit_id === targetId) {
+    if (global.currentUnitId(global.STATE) === targetId) {
       try {
         const res = await global.api(`/sessions/${global.SID}/legal_actions?explain=true`);
         global.LEGAL_ACTIONS = res.actions || [];
@@ -177,15 +208,16 @@
         }
         if (a.kind === 'attack' && a.attacker_id === targetId) {
           const tgt = global.STATE.units[a.target_id];
-          if (tgt && tgt.alive && tgt.side !== sel.side) {
-            global.ATTACK_HINTS.set(`${tgt.pos[0]},${tgt.pos[1]}`, tgt.id);
+          if (tgt && global.unitAlive(tgt)) {
+            const pos = global.unitPos(tgt);
+            global.ATTACK_HINTS.set(`${pos[0]},${pos[1]}`, tgt.id);
           }
         }
       }
   return;
     }
 
-    const base = (sel.stats && sel.stats.base) || {};
+    const base = global.unitBaseStats(sel);
     const MOV = Number(
       base.MOV ?? base['MOV'] ?? base.mov ?? base['mov'] ?? 0
     );
@@ -194,7 +226,7 @@
     );
 
     if (MOV > 0) {
-      const start = [sel.pos[0], sel.pos[1]];
+      const start = global.unitPos(sel);
       const queue = [[start, 0]];
       const seen = new Set([`${start[0]},${start[1]}`]);
       while (queue.length) {
@@ -214,10 +246,10 @@
 
     if (RNG > 0) {
       for (const other of Object.values(global.STATE.units)) {
-        if (!other.alive || other.id === sel.id) continue;
-        if (other.side === sel.side) continue;
-        if (global.manh(sel.pos, other.pos) <= RNG) {
-          global.ATTACK_HINTS.set(`${other.pos[0]},${other.pos[1]}`, other.id);
+        if (!global.unitAlive(other) || other.id === sel.id) continue;
+        if (global.manh(global.unitPos(sel), global.unitPos(other)) <= RNG) {
+          const pos = global.unitPos(other);
+          global.ATTACK_HINTS.set(`${pos[0]},${pos[1]}`, other.id);
         }
       }
     }
@@ -243,7 +275,7 @@
     const units = new Set();
   // Resolve skill details for fallback targeting ranges
   const unit = global.STATE.units[unitId];
-  const skill = unit && Array.isArray(unit.skills) ? unit.skills.find(s => s && s.id === skillId) : null;
+  const skill = global.unitSkills(unit).find(s => s && s.id === skillId);
   const range = Number(skill?.range ?? 0);
   const targetKind = String(skill?.target || 'none');
     try {
@@ -259,15 +291,16 @@
         }
         if (a.target_unit_id) {
           const u = global.STATE.units[a.target_unit_id];
-          if (u && Array.isArray(u.pos)) {
+          if (u) {
+            const pos = global.unitPos(u);
             units.add(a.target_unit_id);
-            tiles.add(`${u.pos[0]},${u.pos[1]}`);
+            tiles.add(`${pos[0]},${pos[1]}`);
           }
         }
       }
       // Fallback for TILE-targeted skills: allow any in-range tile (including empty)
       if (targetKind === 'tile') {
-        const pos = Array.isArray(unit?.pos) ? unit.pos : [0, 0];
+        const pos = global.unitPos(unit);
         const H = global.STATE.map?.height ?? 0;
         const W = global.STATE.map?.width ?? 0;
         if (range <= 0) {

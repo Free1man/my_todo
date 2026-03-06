@@ -44,15 +44,11 @@ def _manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
 
 def _nearest_enemy_dist(unit_id: str, mission: Mission) -> int | None:
     self_u = mission.units.get(unit_id)
-    if not self_u or not self_u.alive:
+    if not self_u or not self_u.state.alive:
         return None
     dists: list[int] = []
-    for other in mission.units.values():
-        if not other.alive or other.id == self_u.id:
-            continue
-        if other.side == self_u.side:
-            continue
-        dists.append(_manhattan(self_u.pos, other.pos))
+    for other in mission.enemies_of(self_u):
+        dists.append(_manhattan(self_u.state.pos, other.state.pos))
     return min(dists) if dists else None
 
 
@@ -60,12 +56,10 @@ def _nearest_enemy_dist_from(
     coord: tuple[int, int], self_side: Side, mission: Mission
 ) -> int | None:
     dists: list[int] = []
-    for other in mission.units.values():
-        if not other.alive:
+    for other in mission.living_units():
+        if other.template.side == self_side:
             continue
-        if other.side == self_side:
-            continue
-        dists.append(_manhattan(coord, other.pos))
+        dists.append(_manhattan(coord, other.state.pos))
     return min(dists) if dists else None
 
 
@@ -85,7 +79,7 @@ def _score_attack(
     atk = mission.units.get(act.attacker_id)
     tgt = mission.units.get(act.target_id)
     # Avoid attacking same-side units for now
-    if atk and tgt and atk.side == tgt.side:
+    if atk and tgt and atk.template.side == tgt.template.side:
         return float("-1e9")
     from .systems import stats as _stats
 
@@ -103,7 +97,7 @@ def _score_move(mission: Mission, act: MoveAction, w: AIScoringWeights) -> float
     if not u:
         return 0.0
     before = _nearest_enemy_dist(u.id, mission)
-    after = _nearest_enemy_dist_from(act.to, u.side, mission)
+    after = _nearest_enemy_dist_from(act.to, u.template.side, mission)
     if before is None or after is None:
         return 0.0
     improvement = max(0, before - after)

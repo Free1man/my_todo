@@ -38,9 +38,32 @@ def _units_by_id(sess_json: dict) -> dict[str, dict]:
     return units
 
 
+def _turn_state(sess_json: dict) -> dict:
+    return sess_json.get("mission", {}).get("turn_state", {})
+
+
+def _current_unit_id(sess_json: dict) -> str | None:
+    return _turn_state(sess_json).get("current_unit_id")
+
+
+def _turn_number(sess_json: dict) -> int | None:
+    return _turn_state(sess_json).get("turn")
+
+
+def _mission_status(sess_json: dict) -> str | None:
+    return _turn_state(sess_json).get("status")
+
+
+def _unit_template(sess_json: dict, uid: str) -> dict:
+    return _units_by_id(sess_json)[uid].get("template", {})
+
+
+def _unit_state(sess_json: dict, uid: str) -> dict:
+    return _units_by_id(sess_json)[uid].get("state", {})
+
+
 def _hp_of(sess_json: dict, uid: str) -> int:
-    u = _units_by_id(sess_json)[uid]
-    base = u.get("stats", {}).get("base", {})
+    base = _unit_template(sess_json, uid).get("stats", {}).get("base", {})
     return int(base.get("hp") or base.get("HP") or 0)
 
 

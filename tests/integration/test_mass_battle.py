@@ -9,7 +9,7 @@ from backend.models.enums import GoalKind, Side, StatName, Terrain
 from backend.models.map import MapGrid, Tile
 from backend.models.mission import Mission, MissionGoal
 from backend.models.modifiers import StatBlock
-from backend.models.units import Unit
+from backend.models.units import BattleUnitState, Unit, UnitTemplate
 from tests.integration.utils.helpers import _create_tbs_session
 
 Coord = tuple[int, int]
@@ -36,7 +36,13 @@ def _make_unit(uid: str, name: str, side: Side, pos: Coord, init: int) -> Unit:
         StatName.INIT: init,
     }
     return Unit(
-        id=uid, name=name, side=side, pos=pos, stats=StatBlock(base=base), ap_left=2
+        id=uid,
+        template=UnitTemplate(
+            name=name,
+            side=side,
+            stats=StatBlock(base=base),
+        ),
+        state=BattleUnitState(pos=pos, ap_left=2),
     )
 
 
@@ -74,26 +80,40 @@ def _manhattan(a: Coord, b: Coord) -> int:
 
 def _alive_counts(sess_json: dict) -> tuple[int, int]:
     units: dict[str, dict] = sess_json["mission"]["units"]
-    p = sum(1 for u in units.values() if u.get("alive", True) and u["side"] == "player")
-    e = sum(1 for u in units.values() if u.get("alive", True) and u["side"] == "enemy")
+    p = sum(
+        1
+        for u in units.values()
+        if u["state"].get("alive", True) and u["template"]["side"] == "player"
+    )
+    e = sum(
+        1
+        for u in units.values()
+        if u["state"].get("alive", True) and u["template"]["side"] == "enemy"
+    )
     return p, e
 
 
 def _occupied_positions(sess_json: dict) -> set[Coord]:
     units: dict[str, dict] = sess_json["mission"]["units"]
-    return {tuple(u["pos"]) for u in units.values() if u.get("alive", True)}
+    return {
+        tuple(u["state"]["pos"])
+        for u in units.values()
+        if u["state"].get("alive", True)
+    }
 
 
 def _choose_move_destination(sess_json: dict, target: Coord) -> Coord | None:
     mission = sess_json["mission"]
-    uid = mission.get("current_unit_id")
+    uid = mission.get("turn_state", {}).get("current_unit_id")
     if not uid:
         return None
     units = mission["units"]
     me = units[uid]
-    me_pos = tuple(me["pos"])  # type: ignore
+    me_pos = tuple(me["state"]["pos"])  # type: ignore
     mov = int(
-        me["stats"]["base"].get("mov") or me["stats"]["base"].get("MOV") or 0
+        me["template"]["stats"]["base"].get("mov")
+        or me["template"]["stats"]["base"].get("MOV")
+        or 0
     )  # base MOV is fine in this setup
 
     # Plain map with no blocking terrain; avoid only occupied tiles
@@ -166,8 +186,11 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
     steps = 0
     last_logged_turn = 0
 
-    while sess["mission"]["status"] == "in_progress" and steps < max_steps:
-        turn = sess["mission"]["turn"]
+    while (
+        sess["mission"]["turn_state"]["status"] == "in_progress" and steps < max_steps
+    ):
+        turn_state = sess["mission"]["turn_state"]
+        turn = turn_state["turn"]
         if turn != last_logged_turn:
             p, e = _alive_counts(sess)
             logger.info("[mass] Turn %s: %s alive vs %s alive", turn, p, e)
@@ -175,7 +198,7 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
 
         # Plan based on known setup: move toward nearest foe, attack when in range
         mission = sess["mission"]
-        uid = mission.get("current_unit_id")
+        uid = mission.get("turn_state", {}).get("current_unit_id")
         if not uid:
             # should not happen; end turn to progress
             sess = _apply_with_session(http, base_url, sid, {"kind": "end_turn"})
@@ -184,25 +207,30 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
 
         units = mission["units"]
         me = units[uid]
-        if not me.get("alive", True):
+        if not me["state"].get("alive", True):
             sess = _apply_with_session(http, base_url, sid, {"kind": "end_turn"})
             steps += 1
             continue
 
         # find closest enemy
         foes = [
-            (oid, tuple(u["pos"]))
+            (oid, tuple(u["state"]["pos"]))
             for oid, u in units.items()
-            if u.get("alive", True) and u["side"] != me["side"]
+            if u["state"].get("alive", True)
+            and u["template"]["side"] != me["template"]["side"]
         ]
         if not foes:
             break
-        me_pos = tuple(me["pos"])  # type: ignore
+        me_pos = tuple(me["state"]["pos"])  # type: ignore
         # choose nearest by Manhattan (tie by unit id for determinism)
         target_id, target_pos = min(
             foes, key=lambda t: (_manhattan(me_pos, t[1]), t[0])
         )
-        rng = int(me["stats"]["base"].get("rng") or me["stats"]["base"].get("RNG") or 1)
+        rng = int(
+            me["template"]["stats"]["base"].get("rng")
+            or me["template"]["stats"]["base"].get("RNG")
+            or 1
+        )
         dist = _manhattan(me_pos, target_pos)
 
         # Try ATTACK if in range
@@ -241,7 +269,7 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
     steps += 1
 
     # 3) Assertions — we should end in victory or defeat within the step budget
-    status = sess["mission"]["status"]
+    status = sess["mission"]["turn_state"]["status"]
     assert status in (
         "victory",
         "defeat",
@@ -250,8 +278,8 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
     p, e = _alive_counts(sess)
     logger.info(
         "[mass] Final: status=%s, turn=%s, %s alive vs %s alive",
-        sess["mission"]["status"],
-        sess["mission"]["turn"],
+        sess["mission"]["turn_state"]["status"],
+        sess["mission"]["turn_state"]["turn"],
         p,
         e,
     )

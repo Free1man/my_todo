@@ -12,8 +12,11 @@ from tests.integration.utils.data import (
 from tests.integration.utils.helpers import (
     _apply,
     _create_tbs_session,
+    _current_unit_id,
     _evaluate,
     _hp_of,
+    _mission_status,
+    _turn_number,
 )
 
 
@@ -23,16 +26,16 @@ def test_victory_on_eliminating_all_enemies(base_url: str):
     target = goblin_template()
 
     # 2. Customize units for one-shot kill
-    attacker.pos = (1, 1)
-    attacker.stats.base[StatName.ATK] = 10
+    attacker.state.pos = (1, 1)
+    attacker.template.stats.base[StatName.ATK] = 10
 
-    target.pos = (1, 2)
-    target.stats.base[StatName.HP] = 5
-    target.stats.base[StatName.DEF] = 0
+    target.state.pos = (1, 2)
+    target.template.stats.base[StatName.HP] = 5
+    target.template.stats.base[StatName.DEF] = 0
 
     # 3. Create mission with ELIMINATE_ALL_ENEMIES goal
     mission = simple_mission([attacker, target])
-    mission.current_unit_id = attacker.id
+    mission.turn_state.current_unit_id = attacker.id
     mission.goals = [MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)]
 
     # 4. Create session
@@ -49,7 +52,7 @@ def test_victory_on_eliminating_all_enemies(base_url: str):
 
     # 6. Check for victory
     assert _hp_of(sess, target.id) <= 0
-    assert sess["mission"]["status"] == "victory"
+    assert _mission_status(sess) == "victory"
 
 
 def test_victory_on_surviving_turns(base_url: str):
@@ -60,29 +63,29 @@ def test_victory_on_surviving_turns(base_url: str):
     # 2. Create mission with SURVIVE_TURNS goal
     mission = simple_mission([unit_player, unit_enemy])
     mission.goals = [MissionGoal(kind=GoalKind.SURVIVE_TURNS, survive_turns=2)]
-    mission.current_unit_id = unit_player.id
+    mission.turn_state.current_unit_id = unit_player.id
 
     # 3. Create session
     sid, sess = _create_tbs_session(base_url, mission)
-    assert sess["mission"]["status"] == "in_progress"
+    assert _mission_status(sess) == "in_progress"
 
     # 4. End turn until victory
     end_turn_action = {"kind": "end_turn"}
 
     # P1 T1
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess["mission"]["turn"] == 1
-    assert sess["mission"]["status"] == "in_progress"
+    assert _turn_number(sess) == 1
+    assert _mission_status(sess) == "in_progress"
 
     # E1 T1
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess["mission"]["turn"] == 2
-    assert sess["mission"]["status"] == "victory"
+    assert _turn_number(sess) == 2
+    assert _mission_status(sess) == "victory"
 
     # P1 T2
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess["mission"]["turn"] == 2
-    assert sess["mission"]["status"] == "victory"
+    assert _turn_number(sess) == 2
+    assert _mission_status(sess) == "victory"
 
 
 def test_defeat_on_player_elimination(base_url: str):
@@ -91,12 +94,12 @@ def test_defeat_on_player_elimination(base_url: str):
     target = hero_template()
 
     # 2. Customize units for one-shot kill
-    attacker.pos = (1, 1)
-    attacker.stats.base[StatName.ATK] = 100  # Overkill
-    attacker.stats.base[StatName.INIT] = 20  # Ensure enemy goes first
+    attacker.state.pos = (1, 1)
+    attacker.template.stats.base[StatName.ATK] = 100  # Overkill
+    attacker.template.stats.base[StatName.INIT] = 20  # Ensure enemy goes first
 
-    target.pos = (1, 2)
-    target.stats.base[StatName.HP] = 5
+    target.state.pos = (1, 2)
+    target.template.stats.base[StatName.HP] = 5
 
     # 3. Create mission
     mission = simple_mission([attacker, target])
@@ -104,7 +107,7 @@ def test_defeat_on_player_elimination(base_url: str):
 
     # 4. Create session
     sid, sess = _create_tbs_session(base_url, mission)
-    assert sess["mission"]["current_unit_id"] == attacker.id
+    assert _current_unit_id(sess) == attacker.id
 
     # 5. Attack and kill the player unit
     atk_action = AttackAction(attacker_id=attacker.id, target_id=target.id)
@@ -117,4 +120,4 @@ def test_defeat_on_player_elimination(base_url: str):
 
     # 6. Check for defeat
     assert _hp_of(sess, target.id) <= 0
-    assert sess["mission"]["status"] == "defeat"
+    assert _mission_status(sess) == "defeat"

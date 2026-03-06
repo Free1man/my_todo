@@ -17,7 +17,7 @@ def test_archer_surrounded_attack_count_and_perf(base_url: str):
 
     archer = archer_template()
     archer.id = "p.archer"
-    archer.pos = center
+    archer.state.pos = center
     # Set RNG so that ALL tiles on the map are within range
     max_rng = max(
         abs(x - center[0]) + abs(y - center[1])
@@ -25,7 +25,7 @@ def test_archer_surrounded_attack_count_and_perf(base_url: str):
         for y in range(height)
     )
     rng = max_rng
-    archer.stats.base[StatName.RNG] = rng
+    archer.template.stats.base[StatName.RNG] = rng
     enemy_positions = [
         (x, y) for x in range(width) for y in range(height) if (x, y) != center
     ]
@@ -34,7 +34,7 @@ def test_archer_surrounded_attack_count_and_perf(base_url: str):
     for i, pos in enumerate(enemy_positions):
         e = goblin_template()
         e.id = f"e{i}"
-        e.pos = pos
+        e.state.pos = pos
         enemies.append(e)
 
     mission = simple_mission([archer, *enemies], width=width, height=height)

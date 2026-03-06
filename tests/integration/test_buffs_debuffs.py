@@ -20,8 +20,10 @@ from tests.integration.utils.data import (
 from tests.integration.utils.helpers import (
     _apply,
     _create_tbs_session,
+    _current_unit_id,
     _evaluate,
     _hp_of,
+    _unit_state,
 )
 
 
@@ -29,22 +31,24 @@ def test_heal_after_enemy_attack(base_url: str):
     # Setup: enemy near player; enemy acts first and hits, player heals on next turn
     player = hero_template()
     player.id = "player"
-    player.pos = (1, 1)
-    player.items = []
+    player.state.pos = (1, 1)
+    player.template.items = []
     # Give a heal skill
-    player.skills = [heal_skill_template(amount=3)]
+    player.template.skills = [heal_skill_template(amount=3)]
 
     enemy = goblin_template()
     enemy.id = "enemy"
-    enemy.pos = (1, 2)
-    enemy.stats.base[StatName.INIT] = 100  # enemy goes first to damage the player
+    enemy.state.pos = (1, 2)
+    enemy.template.stats.base[StatName.INIT] = (
+        100  # enemy goes first to damage the player
+    )
 
     mission = simple_mission([player, enemy])
 
     sid, sess = _create_tbs_session(base_url, mission)
 
     # Enemy's turn: attack player
-    assert sess["mission"]["current_unit_id"] == "enemy"
+    assert _current_unit_id(sess) == "enemy"
     hp0 = _hp_of(sess, "player")
     atk = AttackAction(attacker_id="enemy", target_id="player")
     atk_payload = json.loads(atk.model_dump_json())
@@ -57,7 +61,7 @@ def test_heal_after_enemy_attack(base_url: str):
     # Player's turn: heal self
     # End enemy turn so the player can act
     sess = _apply(base_url, sid, {"kind": "end_turn"})
-    assert sess["mission"]["current_unit_id"] == "player"
+    assert _current_unit_id(sess) == "player"
     heal = UseSkillAction(
         unit_id="player", skill_id="skill.heal.simple", target_unit_id="player"
     )
@@ -74,25 +78,27 @@ def test_weaken_enemy_attack_reduces_damage(base_url: str):
     # Setup units adjacent; player weakens enemy before enemy attacks
     player = hero_template()
     player.id = "player"
-    player.pos = (1, 1)
-    player.items = []
-    player.stats.base[StatName.INIT] = 100  # player goes first
+    player.state.pos = (1, 1)
+    player.template.items = []
+    player.template.stats.base[StatName.INIT] = 100  # player goes first
     # Lower player's defense to make baseline damage > 1
-    player.stats.base[StatName.DEF] = 0
-    player.skills = [weaken_attack_skill_template(delta_atk=-2, duration_turns=2)]
+    player.template.stats.base[StatName.DEF] = 0
+    player.template.skills = [
+        weaken_attack_skill_template(delta_atk=-2, duration_turns=2)
+    ]
 
     enemy = goblin_template()
     enemy.id = "enemy"
-    enemy.pos = (1, 2)
+    enemy.state.pos = (1, 2)
     # Increase enemy attack so baseline damage is higher
-    enemy.stats.base[StatName.ATK] = 4
+    enemy.template.stats.base[StatName.ATK] = 4
 
     mission = simple_mission([player, enemy])
-    mission.current_unit_id = "player"
+    mission.turn_state.current_unit_id = "player"
 
     sid, sess = _create_tbs_session(base_url, mission)
 
-    assert sess["mission"]["current_unit_id"] == "player"
+    assert _current_unit_id(sess) == "player"
 
     # Player casts weaken on enemy
     weaken = UseSkillAction(
@@ -105,7 +111,7 @@ def test_weaken_enemy_attack_reduces_damage(base_url: str):
 
     # End player's turn so enemy can act
     sess = _apply(base_url, sid, {"kind": "end_turn"})
-    assert sess["mission"]["current_unit_id"] == "enemy"
+    assert _current_unit_id(sess) == "enemy"
 
     # Record player's HP before enemy attack
     hp_before = _hp_of(sess, "player")
@@ -123,19 +129,19 @@ def test_weaken_enemy_attack_reduces_damage(base_url: str):
     # Now compute a baseline by recreating scenario without debuff
     player2 = hero_template()
     player2.id = "p2"
-    player2.pos = (1, 1)
-    player2.items = []
+    player2.state.pos = (1, 1)
+    player2.template.items = []
     # Mirror defense change from the main scenario
-    player2.stats.base[StatName.DEF] = 0
+    player2.template.stats.base[StatName.DEF] = 0
 
     enemy2 = goblin_template()
     enemy2.id = "e2"
-    enemy2.pos = (1, 2)
+    enemy2.state.pos = (1, 2)
     # Mirror attack change from the main scenario
-    enemy2.stats.base[StatName.ATK] = 4
+    enemy2.template.stats.base[StatName.ATK] = 4
 
     mission2 = simple_mission([player2, enemy2])
-    mission2.current_unit_id = "e2"  # make enemy attack immediately
+    mission2.turn_state.current_unit_id = "e2"  # make enemy attack immediately
     sid2, sess2 = _create_tbs_session(base_url, mission2)
     hp2_before = _hp_of(sess2, "p2")
     atk2 = AttackAction(attacker_id="e2", target_id="p2")
@@ -154,10 +160,10 @@ def test_weaken_enemy_attack_reduces_damage(base_url: str):
     # Advance two turns to let debuff expire on enemy, then enemy attacks again
     # 1) End enemy's current turn -> player's turn
     sess = _apply(base_url, sid, {"kind": "end_turn"})
-    assert sess["mission"]["current_unit_id"] == "player"
+    assert _current_unit_id(sess) == "player"
     # 2) End player's turn -> back to enemy
     sess = _apply(base_url, sid, {"kind": "end_turn"})
-    assert sess["mission"]["current_unit_id"] == "enemy"
+    assert _current_unit_id(sess) == "enemy"
 
     # Attack again; debuff should be gone now
     hp_before2 = _hp_of(sess, "player")
@@ -177,10 +183,10 @@ def test_weaken_enemy_attack_reduces_damage(base_url: str):
 def test_cooldown_ticks_only_on_owner_turns(base_url: str):
     player = hero_template()
     player.id = "player"
-    player.pos = (1, 1)
-    player.items = []
-    player.stats.base[StatName.INIT] = 100
-    player.skills = [
+    player.state.pos = (1, 1)
+    player.template.items = []
+    player.template.stats.base[StatName.INIT] = 100
+    player.template.skills = [
         Skill(
             id="skill.self.focus",
             name="Focus",
@@ -203,62 +209,54 @@ def test_cooldown_ticks_only_on_owner_turns(base_url: str):
 
     ally = hero_template()
     ally.id = "ally"
-    ally.pos = (0, 1)
-    ally.stats.base[StatName.INIT] = 60
-    ally.skills = []
+    ally.state.pos = (0, 1)
+    ally.template.stats.base[StatName.INIT] = 60
+    ally.template.skills = []
 
     enemy = goblin_template()
     enemy.id = "enemy"
-    enemy.pos = (1, 2)
-    enemy.stats.base[StatName.INIT] = 20
+    enemy.state.pos = (1, 2)
+    enemy.template.stats.base[StatName.INIT] = 20
 
     mission = simple_mission([player, ally, enemy], width=4, height=4)
-    mission.current_unit_id = player.id
+    mission.turn_state.current_unit_id = player.id
 
     sid, sess = _create_tbs_session(base_url, mission)
-    assert sess["mission"]["current_unit_id"] == "player"
+    assert _current_unit_id(sess) == "player"
 
     focus = UseSkillAction(unit_id="player", skill_id="skill.self.focus")
     focus_payload = json.loads(focus.model_dump_json())
     sess = _apply(base_url, sid, focus_payload)
-    assert (
-        sess["mission"]["units"]["player"]["skill_cooldowns"]["skill.self.focus"] == 2
-    )
+    assert _unit_state(sess, "player")["skill_cooldowns"]["skill.self.focus"] == 2
 
     sess = _apply(base_url, sid, {"kind": "end_turn"})
-    assert sess["mission"]["current_unit_id"] == "ally"
-    assert (
-        sess["mission"]["units"]["player"]["skill_cooldowns"]["skill.self.focus"] == 2
-    )
+    assert _current_unit_id(sess) == "ally"
+    assert _unit_state(sess, "player")["skill_cooldowns"]["skill.self.focus"] == 2
 
     sess = _apply(base_url, sid, {"kind": "end_turn"})
-    assert sess["mission"]["current_unit_id"] == "enemy"
-    assert (
-        sess["mission"]["units"]["player"]["skill_cooldowns"]["skill.self.focus"] == 2
-    )
+    assert _current_unit_id(sess) == "enemy"
+    assert _unit_state(sess, "player")["skill_cooldowns"]["skill.self.focus"] == 2
 
     sess = _apply(base_url, sid, {"kind": "end_turn"})
-    assert sess["mission"]["current_unit_id"] == "player"
-    assert (
-        sess["mission"]["units"]["player"]["skill_cooldowns"]["skill.self.focus"] == 1
-    )
+    assert _current_unit_id(sess) == "player"
+    assert _unit_state(sess, "player")["skill_cooldowns"]["skill.self.focus"] == 1
     assert not _evaluate(base_url, sid, focus_payload).get("legal", False)
 
     sess = _apply(base_url, sid, {"kind": "end_turn"})
     sess = _apply(base_url, sid, {"kind": "end_turn"})
     sess = _apply(base_url, sid, {"kind": "end_turn"})
-    assert sess["mission"]["current_unit_id"] == "player"
-    assert sess["mission"]["units"]["player"]["skill_cooldowns"] == {}
+    assert _current_unit_id(sess) == "player"
+    assert _unit_state(sess, "player")["skill_cooldowns"] == {}
     assert _evaluate(base_url, sid, focus_payload).get("legal")
 
 
 def test_temp_modifiers_are_instanced_per_target(base_url: str):
     player = hero_template()
     player.id = "player"
-    player.pos = (1, 1)
-    player.items = []
-    player.stats.base[StatName.INIT] = 100
-    player.skills = [
+    player.state.pos = (1, 1)
+    player.template.items = []
+    player.template.stats.base[StatName.INIT] = 100
+    player.template.skills = [
         Skill(
             id="skill.tile.sunder",
             name="Sunder Field",
@@ -281,16 +279,16 @@ def test_temp_modifiers_are_instanced_per_target(base_url: str):
 
     enemy_fast = goblin_template()
     enemy_fast.id = "enemy_fast"
-    enemy_fast.pos = (1, 2)
-    enemy_fast.stats.base[StatName.INIT] = 50
+    enemy_fast.state.pos = (1, 2)
+    enemy_fast.template.stats.base[StatName.INIT] = 50
 
     enemy_slow = goblin_template()
     enemy_slow.id = "enemy_slow"
-    enemy_slow.pos = (2, 1)
-    enemy_slow.stats.base[StatName.INIT] = 10
+    enemy_slow.state.pos = (2, 1)
+    enemy_slow.template.stats.base[StatName.INIT] = 10
 
     mission = simple_mission([player, enemy_fast, enemy_slow], width=4, height=4)
-    mission.current_unit_id = player.id
+    mission.turn_state.current_unit_id = player.id
 
     sid, sess = _create_tbs_session(base_url, mission)
     action = UseSkillAction(
@@ -302,10 +300,10 @@ def test_temp_modifiers_are_instanced_per_target(base_url: str):
     payload = json.loads(action.model_dump_json())
 
     sess = _apply(base_url, sid, payload)
-    assert sess["mission"]["units"]["enemy_fast"]["temp_mods"][0]["duration_turns"] == 2
-    assert sess["mission"]["units"]["enemy_slow"]["temp_mods"][0]["duration_turns"] == 2
+    assert _unit_state(sess, "enemy_fast")["temp_mods"][0]["duration_turns"] == 2
+    assert _unit_state(sess, "enemy_slow")["temp_mods"][0]["duration_turns"] == 2
 
     sess = _apply(base_url, sid, {"kind": "end_turn"})
-    assert sess["mission"]["current_unit_id"] == "enemy_fast"
-    assert sess["mission"]["units"]["enemy_fast"]["temp_mods"][0]["duration_turns"] == 1
-    assert sess["mission"]["units"]["enemy_slow"]["temp_mods"][0]["duration_turns"] == 2
+    assert _current_unit_id(sess) == "enemy_fast"
+    assert _unit_state(sess, "enemy_fast")["temp_mods"][0]["duration_turns"] == 1
+    assert _unit_state(sess, "enemy_slow")["temp_mods"][0]["duration_turns"] == 2

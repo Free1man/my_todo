@@ -1,9 +1,32 @@
 from ..models.enums import Side, StatName, Terrain
 from ..models.map import MapGrid, Tile
-from ..models.mission import GoalKind, Mission, MissionEvent, MissionGoal
+from ..models.mission import GoalKind, Mission, MissionEvent, MissionGoal, TurnState
 from ..models.modifiers import ModifierSource, Operation, StatBlock, StatModifier
 from ..models.skills import Item, Skill, SkillKind, SkillTarget
-from ..models.units import Unit
+from ..models.units import BattleUnitState, Unit, UnitTemplate
+
+
+def _unit(
+    *,
+    uid: str,
+    side: Side,
+    name: str,
+    pos: tuple[int, int],
+    stats: StatBlock | None = None,
+    items: list[Item] | None = None,
+    skills: list[Skill] | None = None,
+) -> Unit:
+    return Unit(
+        id=uid,
+        template=UnitTemplate(
+            side=side,
+            name=name,
+            stats=stats or StatBlock(),
+            items=items or [],
+            skills=skills or [],
+        ),
+        state=BattleUnitState(pos=pos),
+    )
 
 
 def default_demo_mission() -> Mission:
@@ -149,30 +172,30 @@ def default_demo_mission() -> Mission:
     )
 
     units = {
-        "u.fighter": Unit(
-            id="u.fighter",
+        "u.fighter": _unit(
+            uid="u.fighter",
             side=Side.PLAYER,
             name="Fighter",
             pos=(1, 1),
             items=[iron_sword, leather_armor],
             skills=[active_shout, passive_focus],
         ),
-        "u.priest": Unit(
-            id="u.priest",
+        "u.priest": _unit(
+            uid="u.priest",
             side=Side.PLAYER,
             name="Priest",
             pos=(2, 1),
             skills=[heal],
         ),
-        "u.mage": Unit(
-            id="u.mage",
+        "u.mage": _unit(
+            uid="u.mage",
             side=Side.PLAYER,
             name="Mage",
             pos=(0, 2),
             skills=[fireball, self_rally],
         ),
-        "e.goblin1": Unit(
-            id="e.goblin1",
+        "e.goblin1": _unit(
+            uid="e.goblin1",
             side=Side.ENEMY,
             name="Goblin",
             pos=(5, 5),
@@ -189,8 +212,8 @@ def default_demo_mission() -> Mission:
                 }
             ),
         ),
-        "e.goblin2": Unit(
-            id="e.goblin2",
+        "e.goblin2": _unit(
+            uid="e.goblin2",
             side=Side.ENEMY,
             name="Goblin",
             pos=(6, 5),
@@ -214,8 +237,6 @@ def default_demo_mission() -> Mission:
         name="Demo Skirmish",
         map=grid,
         units=units,
-        side_to_move=Side.PLAYER,
-        turn=1,
         max_turns=20,
         goals=[MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)],
         pre_events=[
@@ -223,8 +244,7 @@ def default_demo_mission() -> Mission:
         ],
         post_events=[],
         global_mods=[],
-        initiative_order=[],
-        current_unit_id=None,
         enemy_ai=True,
+        turn_state=TurnState(side_to_move=Side.PLAYER, turn=1),
     )
     return mission

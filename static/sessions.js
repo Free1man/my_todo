@@ -75,7 +75,7 @@
           info.className = 'session-info';
           const m = s.mission || {};
           const unitsCount = m.units ? Object.keys(m.units).length : 0;
-          info.textContent = `${s.id} — Turn ${m.turn ?? '-'} | Side ${m.side_to_move ?? '-'} | Units ${unitsCount}`;
+          info.textContent = `${s.id} — Turn ${global.turnNumber(m) ?? '-'} | Side ${global.sideToMove(m) ?? '-'} | Units ${unitsCount}`;
           const btn = document.createElement('button');
           btn.className = 'session-btn action-btn';
           btn.textContent = 'Continue';

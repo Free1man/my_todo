@@ -9,14 +9,15 @@
 
     render(state, sid, selected, previewUnit, legalActions) {
       document.getElementById('sid').textContent = sid || '-';
-      document.getElementById('turn').textContent = state ? state.turn : '-';
-      document.getElementById('side').textContent = state ? state.side_to_move : '-';
-      document.getElementById('current-unit').textContent = state?.current_unit_id ?
-        state.units[state.current_unit_id]?.name || 'unknown' : 'none';
-      document.getElementById('ap').textContent = state?.current_unit_id ?
-        state.units[state.current_unit_id]?.ap_left || 0 : '-';
+      document.getElementById('turn').textContent = state ? global.turnNumber(state) ?? '-' : '-';
+      document.getElementById('side').textContent = state ? global.sideToMove(state) ?? '-' : '-';
+      const currentUnitId = global.currentUnitId(state);
+      document.getElementById('current-unit').textContent = currentUnitId ?
+        global.unitName(state.units[currentUnitId]) || 'unknown' : 'none';
+      document.getElementById('ap').textContent = currentUnitId ?
+        global.unitApLeft(state.units[currentUnitId]) : '-';
       document.getElementById('sel').textContent = selected && state?.units[selected] ?
-        state.units[selected].name : 'none';
+        global.unitName(state.units[selected]) : 'none';
       const endTurnBtn = document.getElementById('end-turn');
       endTurnBtn.disabled = !sid;
       // Render active unit
@@ -32,13 +33,14 @@
     renderActiveUnit(state, legalActions) {
       const wrap = document.getElementById('active-unit');
       if (!wrap) return;
-      if (!state || !state.current_unit_id) {
+      const currentUnitId = global.currentUnitId(state);
+      if (!state || !currentUnitId) {
         wrap.innerHTML = 'No active unit.';
         return;
       }
-      const u = state.units[state.current_unit_id];
+      const u = state.units[currentUnitId];
       if (!u) { wrap.innerHTML = 'No active unit.'; return; }
-      const base = (u.stats && u.stats.base) || {};
+      const base = global.unitBaseStats(u);
       const get = (k) => {
         const key = String(k);
         return (
@@ -52,9 +54,9 @@
         HP: get('HP'), AP: get('AP'), ATK: get('ATK'), DEF: get('DEF'),
         MOV: get('MOV'), RNG: get('RNG'), CRIT: get('CRIT'), INIT: get('INIT')
       };
-      const items = Array.isArray(u.items) ? u.items : [];
-      const skills = Array.isArray(u.skills) ? u.skills : [];
-      const pos = Array.isArray(u.pos) ? u.pos : (u.pos || [0, 0]);
+      const items = global.unitItems(u);
+      const skills = global.unitSkills(u);
+      const pos = global.unitPos(u);
       const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const fmtMod = (m) => {
         if (!m) return '';
@@ -88,14 +90,14 @@
       const attackEntries = (legalActions || []).filter(e => e?.action?.kind === 'attack' && e.action.attacker_id === u.id);
       const attacksHtml = attackEntries.length ? attackEntries.map(e => {
         const tgt = state.units[e.action.target_id];
-        const name = tgt ? `${tgt.name} (${tgt.side})` : e.action.target_id;
+        const name = tgt ? `${global.unitName(tgt)} (${global.unitSide(tgt)})` : e.action.target_id;
         const sum = e.evaluation?.summary || 'Attack';
         const dmg = e.evaluation ? ` · ${Math.round(e.evaluation.hit?.result ?? 100)}% · ${e.evaluation.min_damage.toFixed(0)}–${e.evaluation.max_damage.toFixed(0)} avg ${e.evaluation.expected_damage.toFixed(1)}` : '';
         return `<button class="action-btn" data-act="attack" data-att="${e.action.attacker_id}" data-tgt="${e.action.target_id}" title="${sum}">Attack ${name}${dmg}</button>`;
       }).join('') : '<span style="color:#777;">None</span>';
       wrap.innerHTML = `
-        <h3>${u.name} <span style="font-weight:400; color:#666;">(${u.side})</span></h3>
-        <div class="meta">Pos: ${pos[0]},${pos[1]} · AP: ${u.ap_left ?? 0}</div>
+        <h3>${global.unitName(u)} <span style="font-weight:400; color:#666;">(${global.unitSide(u)})</span></h3>
+        <div class="meta">Pos: ${pos[0]},${pos[1]} · AP: ${global.unitApLeft(u)}</div>
         <div class="stats-grid">
           <div><b>HP</b>: ${stats.HP}</div>
           <div><b>AP</b>: ${stats.AP}</div>
@@ -159,7 +161,7 @@
         return;
       }
       const u = state.units[uid];
-      const base = (u.stats && u.stats.base) || {};
+      const base = global.unitBaseStats(u);
       const get = (k) => {
         const key = String(k);
         return (
@@ -171,13 +173,13 @@
       };
       const MOV = get('MOV');
       const RNG = get('RNG');
-      const AP = u.ap_left ?? get('AP') ?? 0;
-      const pos = Array.isArray(u.pos) ? u.pos : (u.pos || [0, 0]);
+      const AP = global.unitApLeft(u) || get('AP') || 0;
+      const pos = global.unitPos(u);
       const moveCount = moveHints.size;
       const atkCount = attackHints.size;
-      const mode = (state.current_unit_id === uid) ? 'active (precise)' : 'preview (estimate)';
+      const mode = (global.currentUnitId(state) === uid) ? 'active (precise)' : 'preview (estimate)';
       wrap.innerHTML = `
-        <h3>Preview: ${u.name} <span style="font-weight:400; color:#666;">(${u.side})</span></h3>
+        <h3>Preview: ${global.unitName(u)} <span style="font-weight:400; color:#666;">(${global.unitSide(u)})</span></h3>
         <div class="meta">Pos: ${pos[0]},${pos[1]} · Mode: ${mode}</div>
         <div class="stats-grid">
           <div><b>AP</b>: ${AP}</div>

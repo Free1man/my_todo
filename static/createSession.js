@@ -110,7 +110,7 @@
         const res = await global.api('/sessions', { method: 'POST', body: JSON.stringify(body) });
         global.SID = res.id;
         global.STATE = res.mission;
-        global.SELECTED = global.STATE.current_unit_id || null;
+        global.SELECTED = global.currentUnitId(global.STATE);
         global.PREVIEW_UNIT = null;
         global.LEGAL_ACTIONS = [];
         global.log(`Custom session ${global.SID} created`);

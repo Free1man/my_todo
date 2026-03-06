@@ -25,7 +25,7 @@ def neighbors(grid: MapGrid, c: Coord) -> list[Coord]:
 
 
 def occupied(mission: Mission, c: Coord) -> bool:
-    return any(u.alive and u.pos == c for u in mission.units.values())
+    return mission.occupied(c)
 
 
 def reachable_tiles(mission: Mission, u: Unit) -> set[Coord]:
@@ -36,9 +36,9 @@ def reachable_tiles(mission: Mission, u: Unit) -> set[Coord]:
     if mov == 0:
         return set()
     grid = mission.map
-    frontier: list[tuple[Coord, int]] = [(u.pos, 0)]
-    seen: set[Coord] = {u.pos}
-    reach: set[Coord] = {u.pos}
+    frontier: list[tuple[Coord, int]] = [(u.state.pos, 0)]
+    seen: set[Coord] = {u.state.pos}
+    reach: set[Coord] = {u.state.pos}
     while frontier:
         cur, d = frontier.pop(0)
         if d >= mov:

@@ -5,7 +5,7 @@ import pytest
 import requests
 import requests as _requests
 from backend.models.api import AttackAction, MoveAction
-from backend.models.enums import StatName
+from backend.models.enums import Side, StatName
 from tests.integration.utils.data import (
     archer_template,
     goblin_template,
@@ -16,8 +16,10 @@ from tests.integration.utils.data import (
 from tests.integration.utils.helpers import (
     _apply,
     _create_tbs_session,
+    _current_unit_id,
     _evaluate,
     _hp_of,
+    _turn_number,
 )
 
 
@@ -28,17 +30,17 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
     target = goblin_template()
 
     # 2. Customize units for the test
-    attacker.pos = (1, 1)
-    attacker.stats.base[StatName.ATK] = 5  # Override base attack
-    attacker.items = []  # No items for this test
+    attacker.state.pos = (1, 1)
+    attacker.template.stats.base[StatName.ATK] = 5  # Override base attack
+    attacker.template.items = []  # No items for this test
 
-    target.pos = (1, 2)
-    target.stats.base[StatName.HP] = 10
-    target.stats.base[StatName.DEF] = 0
+    target.state.pos = (1, 2)
+    target.template.stats.base[StatName.HP] = 10
+    target.template.stats.base[StatName.DEF] = 0
 
     # 3. Create mission
     mission = simple_mission([attacker, target])
-    mission.current_unit_id = attacker.id
+    mission.turn_state.current_unit_id = attacker.id
 
     # 4. Create session and run simulation
     sid, sess = _create_tbs_session(base_url, mission)
@@ -95,15 +97,15 @@ def test_melee_out_of_range_attack_rejected(base_url: str):
     target = goblin_template()
 
     # 2. Customize
-    attacker.pos = (0, 0)
-    target.pos = (2, 2)  # Out of default range 1
+    attacker.state.pos = (0, 0)
+    target.state.pos = (2, 2)  # Out of default range 1
 
     # 3. Create mission
     mission = simple_mission([attacker, target])
-    mission.current_unit_id = attacker.id
+    mission.turn_state.current_unit_id = attacker.id
 
     # 4. Create session and run
-    sid, _ = _create_tbs_session(base_url, mission)
+    sid, sess = _create_tbs_session(base_url, mission)
 
     atk_action = AttackAction(attacker_id=attacker.id, target_id=target.id)
     atk_payload = json.loads(atk_action.model_dump_json())
@@ -121,19 +123,20 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     ranged_unit = archer_template()
 
     # 2. Customize and assign items
-    melee_unit.pos = (0, 0)
-    melee_unit.items = []  # No items
-    melee_unit.stats.base[StatName.INIT] = 100
+    melee_unit.state.pos = (0, 0)
+    melee_unit.template.items = []  # No items
+    melee_unit.template.stats.base[StatName.INIT] = 100
 
-    ranged_unit.pos = (0, 2)
-    ranged_unit.items = [short_bow_template()]
-    ranged_unit.stats.base[StatName.ATK] = 4
+    ranged_unit.state.pos = (0, 2)
+    ranged_unit.template.side = Side.ENEMY
+    ranged_unit.template.items = [short_bow_template()]
+    ranged_unit.template.stats.base[StatName.ATK] = 4
 
     # 3. Create mission
     mission = simple_mission([melee_unit, ranged_unit])
 
     # 4. Create session
-    sid, _ = _create_tbs_session(base_url, mission)
+    sid, sess = _create_tbs_session(base_url, mission)
 
     # 5. Melee should fail
     atk_fail_action = AttackAction(attacker_id=melee_unit.id, target_id=ranged_unit.id)
@@ -144,7 +147,7 @@ def test_ranged_can_shoot_over_gap_melee_cannot(base_url: str):
     # 6. End turn for melee unit to pass turn to the ranged unit
     end_turn_action = {"kind": "end_turn"}
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess["mission"]["current_unit_id"] == ranged_unit.id
+    assert _current_unit_id(sess) == ranged_unit.id
 
     # 7. Ranged should succeed
     atk_ok_action = AttackAction(attacker_id=ranged_unit.id, target_id=melee_unit.id)
@@ -188,15 +191,15 @@ def test_initiative_and_turn_order(base_url: str):
     # 1. Setup units with different initiative scores
     unit_fast = hero_template()
     unit_fast.id = "unit_fast"
-    unit_fast.stats.base[StatName.INIT] = 20
+    unit_fast.template.stats.base[StatName.INIT] = 20
 
     unit_mid = goblin_template()
     unit_mid.id = "unit_mid"
-    unit_mid.stats.base[StatName.INIT] = 15
+    unit_mid.template.stats.base[StatName.INIT] = 15
 
     unit_slow = archer_template()
     unit_slow.id = "unit_slow"
-    unit_slow.stats.base[StatName.INIT] = 10
+    unit_slow.template.stats.base[StatName.INIT] = 10
 
     # 2. Create mission - order of units in list shouldn't matter
     mission = simple_mission([unit_slow, unit_mid, unit_fast])
@@ -204,36 +207,36 @@ def test_initiative_and_turn_order(base_url: str):
     # 3. Create session and check initial state
     # Engine should sort by INIT: fast, mid, slow
     sid, sess = _create_tbs_session(base_url, mission)
-    assert sess["mission"]["turn"] == 1
-    assert sess["mission"]["current_unit_id"] == "unit_fast"
+    assert _turn_number(sess) == 1
+    assert _current_unit_id(sess) == "unit_fast"
 
     # 4. End turn 1 (fast -> mid)
     end_turn_action = {"kind": "end_turn"}
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess["mission"]["turn"] == 1
-    assert sess["mission"]["current_unit_id"] == "unit_mid"
+    assert _turn_number(sess) == 1
+    assert _current_unit_id(sess) == "unit_mid"
 
     # 5. End turn 2 (mid -> slow)
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess["mission"]["turn"] == 1
-    assert sess["mission"]["current_unit_id"] == "unit_slow"
+    assert _turn_number(sess) == 1
+    assert _current_unit_id(sess) == "unit_slow"
 
     # 6. End turn 3 (slow -> fast, wraps around to a new turn)
     sess = _apply(base_url, sid, end_turn_action)
-    assert sess["mission"]["turn"] == 2
-    assert sess["mission"]["current_unit_id"] == "unit_fast"
+    assert _turn_number(sess) == 2
+    assert _current_unit_id(sess) == "unit_fast"
 
 
 def test_legal_actions_exclude_same_and_occupied_tile_moves(base_url: str):
     # Setup: two units adjacent; hero should be the one to act
     hero = hero_template()
-    hero.stats.base[StatName.INIT] = 100
-    hero.pos = (1, 1)
+    hero.template.stats.base[StatName.INIT] = 100
+    hero.state.pos = (1, 1)
     goblin = goblin_template()
-    goblin.pos = (1, 2)
+    goblin.state.pos = (1, 2)
 
     mission = simple_mission([hero, goblin])
-    mission.current_unit_id = hero.id
+    mission.turn_state.current_unit_id = hero.id
 
     sid, sess = _create_tbs_session(base_url, mission)
 
@@ -249,8 +252,8 @@ def test_legal_actions_exclude_same_and_occupied_tile_moves(base_url: str):
     ]
 
     # Server state positions
-    cur_pos = sess["mission"]["units"][hero.id]["pos"]
-    occ_pos = sess["mission"]["units"][goblin.id]["pos"]
+    cur_pos = sess["mission"]["units"][hero.id]["state"]["pos"]
+    occ_pos = sess["mission"]["units"][goblin.id]["state"]["pos"]
 
     # Ensure neither staying put nor stepping onto the occupied tile is listed
     assert all(
@@ -267,3 +270,39 @@ def test_legal_actions_exclude_same_and_occupied_tile_moves(base_url: str):
     ex_occ = _evaluate(base_url, sid, json.loads(mv_occ.model_dump_json()))
     assert not ex_same.get("legal"), f"expected same-tile move illegal, got {ex_same}"
     assert not ex_occ.get("legal"), f"expected occupied-tile move illegal, got {ex_occ}"
+
+
+def test_attack_can_target_allies(base_url: str):
+    attacker = hero_template()
+    attacker.id = "hero.a"
+    attacker.template.stats.base[StatName.INIT] = 100
+    attacker.state.pos = (1, 1)
+
+    ally = archer_template()
+    ally.id = "hero.b"
+    ally.state.pos = (1, 2)
+
+    mission = simple_mission([attacker, ally])
+    mission.turn_state.current_unit_id = attacker.id
+
+    sid, sess = _create_tbs_session(base_url, mission)
+
+    atk_action = AttackAction(attacker_id=attacker.id, target_id=ally.id)
+    atk_payload = json.loads(atk_action.model_dump_json())
+    ex = _evaluate(base_url, sid, atk_payload)
+    assert ex.get("legal"), f"ally attack should be legal, got {ex}"
+
+    la = _requests.get(f"{base_url}/sessions/{sid}/legal_actions", timeout=5)
+    la.raise_for_status()
+    acts = la.json()["actions"]
+    assert any(
+        a.get("action", {}).get("kind") == "attack"
+        and a.get("action", {}).get("attacker_id") == attacker.id
+        and a.get("action", {}).get("target_id") == ally.id
+        for a in acts
+    )
+
+    hp_before = _hp_of(sess, ally.id)
+    sess = _apply(base_url, sid, atk_payload)
+    hp_after = _hp_of(sess, ally.id)
+    assert hp_after < hp_before

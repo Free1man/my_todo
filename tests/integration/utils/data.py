@@ -12,10 +12,10 @@ from backend.models.enums import (
     Terrain,
 )
 from backend.models.map import MapGrid, Tile
-from backend.models.mission import Mission, MissionGoal
+from backend.models.mission import Mission, MissionGoal, TurnState
 from backend.models.modifiers import StatBlock, StatModifier
 from backend.models.skills import Item, Skill
-from backend.models.units import Unit
+from backend.models.units import BattleUnitState, Unit, UnitTemplate
 
 # ----- Item Templates -----
 
@@ -136,75 +136,86 @@ def fireball_skill_template(power: int = 3, *, rng: int = 3, ap_cost: int = 1) -
 # ----- Unit Templates -----
 
 
+def _make_unit(
+    *,
+    uid: str,
+    side: Side,
+    name: str,
+    pos: tuple[int, int],
+    stats: dict[StatName, int],
+    ap_left: int = 2,
+) -> Unit:
+    return Unit(
+        id=uid,
+        template=UnitTemplate(
+            side=side,
+            name=name,
+            stats=StatBlock(base=stats),
+        ),
+        state=BattleUnitState(pos=pos, ap_left=ap_left),
+    )
+
+
 def hero_template() -> Unit:
     """A standard player-controlled hero unit."""
-    return Unit(
-        id="u.player.hero",
+    return _make_unit(
+        uid="u.player.hero",
         side=Side.PLAYER,
         name="Hero",
         pos=(0, 0),
-        stats=StatBlock(
-            base={
-                StatName.HP: 10,
-                StatName.MAX_HP: 10,
-                StatName.AP: 2,
-                StatName.ATK: 3,
-                StatName.DEF: 2,
-                StatName.MOV: 4,
-                StatName.RNG: 1,
-                StatName.CRIT: 5,
-                StatName.INIT: 12,
-            }
-        ),
-        ap_left=2,
+        stats={
+            StatName.HP: 10,
+            StatName.MAX_HP: 10,
+            StatName.AP: 2,
+            StatName.ATK: 3,
+            StatName.DEF: 2,
+            StatName.MOV: 4,
+            StatName.RNG: 1,
+            StatName.CRIT: 5,
+            StatName.INIT: 12,
+        },
     )
 
 
 def archer_template() -> Unit:
     """A standard player-controlled archer unit."""
-    return Unit(
-        id="u.player.archer",
+    return _make_unit(
+        uid="u.player.archer",
         side=Side.PLAYER,
         name="Archer",
         pos=(0, 0),
-        stats=StatBlock(
-            base={
-                StatName.HP: 9,
-                StatName.MAX_HP: 9,
-                StatName.AP: 2,
-                StatName.ATK: 2,
-                StatName.DEF: 1,
-                StatName.MOV: 4,
-                StatName.RNG: 2,
-                StatName.CRIT: 5,
-                StatName.INIT: 14,
-            }
-        ),
-        ap_left=2,
+        stats={
+            StatName.HP: 9,
+            StatName.MAX_HP: 9,
+            StatName.AP: 2,
+            StatName.ATK: 2,
+            StatName.DEF: 1,
+            StatName.MOV: 4,
+            StatName.RNG: 2,
+            StatName.CRIT: 5,
+            StatName.INIT: 14,
+        },
     )
 
 
 def goblin_template() -> Unit:
     """A standard enemy goblin unit."""
-    return Unit(
-        id="u.enemy.goblin",
+    return _make_unit(
+        uid="u.enemy.goblin",
         side=Side.ENEMY,
         name="Goblin",
         pos=(0, 0),
-        stats=StatBlock(
-            base={
-                StatName.HP: 8,
-                StatName.MAX_HP: 8,
-                StatName.AP: 2,
-                StatName.ATK: 2,
-                StatName.DEF: 1,
-                StatName.MOV: 3,
-                StatName.RNG: 1,
-                StatName.CRIT: 0,
-                StatName.INIT: 9,
-            }
-        ),
-        ap_left=2,
+        stats={
+            StatName.HP: 8,
+            StatName.MAX_HP: 8,
+            StatName.AP: 2,
+            StatName.ATK: 2,
+            StatName.DEF: 1,
+            StatName.MOV: 3,
+            StatName.RNG: 1,
+            StatName.CRIT: 0,
+            StatName.INIT: 9,
+        },
     )
 
 
@@ -225,6 +236,6 @@ def simple_mission(units: list[Unit], width: int = 3, height: int = 3) -> Missio
         name="Test Mission",
         map=grid,
         units=unit_map,
-        side_to_move=Side.PLAYER,
         goals=[MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)],
+        turn_state=TurnState(side_to_move=Side.PLAYER),
     )

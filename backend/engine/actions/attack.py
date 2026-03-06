@@ -16,14 +16,14 @@ class AttackHandler(ActionHandler):
         t = mission.units.get(action.target_id)
         if not a or not t:
             return False, "unknown unit(s)"
-        if not a.alive or mission.current_unit_id != a.id:
+        if not mission.is_current_actor(a.id):
             return False, "attacker cannot act"
-        if a.ap_left < 1:
+        if a.state.ap_left < 1:
             return False, "no AP left"
-        if not t.alive:
+        if not t.state.alive:
             return False, "target already down"
         rng = stats.eff_stat(mission, a, StatName.RNG)
-        if pathfinding.manhattan(a.pos, t.pos) > rng:
+        if pathfinding.manhattan(a.state.pos, t.state.pos) > rng:
             return False, "out of range"
         dmg, hp_before, hp_after, kills = combat.quick_attack_preview(mission, a, t)
         return True, (
@@ -36,7 +36,7 @@ class AttackHandler(ActionHandler):
         a = m.units[action.attacker_id]
         t = m.units[action.target_id]
         combat.apply_attack(m, a, t)
-        a.ap_left -= 1
+        a.state.ap_left -= 1
         attack_eval = combat.evaluate_attack(m, a.id, t.id).model_dump(mode="json")
         log_event(sess, action, ActionLogResult.APPLIED, attack_eval=attack_eval)
         return TBSSession(id=sess.id, mission=m)

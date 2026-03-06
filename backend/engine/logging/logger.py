@@ -31,7 +31,7 @@ def log_event(
 ) -> None:
     entry = ActionLogEntry(
         session_id=sess.id,
-        turn=sess.mission.turn,
+        turn=sess.mission.turn_state.turn,
         actor_unit_id=actor_id(action),
         action=action,
         result=result,
@@ -41,7 +41,7 @@ def log_event(
     event_bus.emit(
         ActionEvent(
             session_id=sess.id,
-            turn=sess.mission.turn,
+            turn=sess.mission.turn_state.turn,
             actor_unit_id=actor_id(action),
             action=action,
             result=result,

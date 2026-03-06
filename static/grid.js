@@ -20,18 +20,22 @@
           tile.dataset.x = x;
           tile.dataset.y = y;
           // Units
-          const unit = Object.values(state.units).find(u => u.alive && u.pos[0] === x && u.pos[1] === y);
+          const unit = Object.values(state.units).find(u => {
+            const pos = global.unitPos(u);
+            return global.unitAlive(u) && pos[0] === x && pos[1] === y;
+          });
           if (unit) {
             const dot = document.createElement('div');
-            dot.className = 'u ' + String(unit.side || '').toLowerCase() + (unit.alive ? '' : ' dead');
-            const base = (unit.stats && unit.stats.base) || {};
+            dot.className = 'u ' + String(global.unitSide(unit) || '').toLowerCase() + (global.unitAlive(unit) ? '' : ' dead');
+            const base = global.unitBaseStats(unit);
             const hp = (base.hp ?? base.HP ?? base['hp'] ?? 0);
-            const ap = (unit.ap_left ?? 0);
+            const ap = global.unitApLeft(unit);
             dot.innerHTML = `<div style="line-height:1.05; text-align:center; font-size:10px;">
       <div>hp: ${hp}</div>
       <div>ap: ${ap}</div>
     </div>`;
             dot.onclick = async (e) => {
+              e.stopPropagation();
               // Skill targeting takes precedence
               if (window.SKILL_TARGETING && window.SKILL_TARGETS && window.SKILL_TARGETS.units?.has(unit.id)) {
                 const { unitId, skillId } = window.SKILL_TARGETING;
@@ -43,12 +47,11 @@
               if (window.SKILL_TARGETING) {
                 window.endSkillTargeting();
               }
-              if (unit.side !== (state.current_unit_id ? state.units[state.current_unit_id]?.side : null)) {
-                const acting = state.units[state.current_unit_id];
-                if (acting) {
-                  const action = { kind: 'attack', attacker_id: acting.id, target_id: unit.id };
-                  global.attemptAction(action);
-                }
+              const currentUnitId = global.currentUnitId(state);
+              const acting = currentUnitId ? state.units[currentUnitId] : null;
+              if (acting && global.SELECTED === acting.id && unit.id !== acting.id) {
+                const action = { kind: 'attack', attacker_id: acting.id, target_id: unit.id };
+                global.attemptAction(action);
               } else {
                 global.SELECTED = unit.id;
                 global.PREVIEW_UNIT = null;
@@ -82,11 +85,18 @@
             tile.appendChild(ring);
           }
           // Selection
-          if (selected && state.units[selected] && state.units[selected].pos[0] === x && state.units[selected].pos[1] === y) {
-            tile.classList.add('selected');
+          if (selected && state.units[selected]) {
+            const pos = global.unitPos(state.units[selected]);
+            if (pos[0] === x && pos[1] === y) {
+              tile.classList.add('selected');
+            }
           }
-          if (state.current_unit_id && state.units[state.current_unit_id] && state.units[state.current_unit_id].pos[0] === x && state.units[state.current_unit_id].pos[1] === y) {
-            tile.classList.add('current');
+          const currentUnitId = global.currentUnitId(state);
+          if (currentUnitId && state.units[currentUnitId]) {
+            const pos = global.unitPos(state.units[currentUnitId]);
+            if (pos[0] === x && pos[1] === y) {
+              tile.classList.add('current');
+            }
           }
           // Click for move
       tile.onclick = () => {
@@ -107,12 +117,15 @@
             if (!selected) return;
             const to = [x, y];
             const selectedUnit = state.units[selected];
-            const isCurrentSel = state.current_unit_id === selectedUnit.id;
-            const targetUnit = Object.values(state.units).find(u => u.alive && u.pos[0] === x && u.pos[1] === y);
+            const isCurrentSel = global.currentUnitId(state) === selectedUnit.id;
+            const targetUnit = Object.values(state.units).find(u => {
+              const pos = global.unitPos(u);
+              return global.unitAlive(u) && pos[0] === x && pos[1] === y;
+            });
             if (!isCurrentSel) return;
             let action;
-            if (targetUnit && targetUnit.side !== selectedUnit.side) {
-              global.log(`Attempting to attack ${targetUnit.name}...`);
+            if (targetUnit && targetUnit.id !== selectedUnit.id) {
+              global.log(`Attempting to attack ${global.unitName(targetUnit)}...`);
               action = { kind: 'attack', attacker_id: selectedUnit.id, target_id: targetUnit.id };
             } else {
               action = { kind: 'move', unit_id: selectedUnit.id, to };

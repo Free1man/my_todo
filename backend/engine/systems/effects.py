@@ -9,15 +9,15 @@ if TYPE_CHECKING:
 
 def decay_temporary_mods(u: Unit) -> None:
     """Reduce duration_turns on temp_mods; drop expired; keep None (permanent) and >1 (decremented)."""
-    if not u.temp_mods:
-        u.temp_mods = []
+    if not u.state.temp_mods:
+        u.state.temp_mods = []
         return
     new_mods: list[StatModifier] = []
-    for m in u.temp_mods:
+    for m in u.state.temp_mods:
         if m.duration_turns is None:
             new_mods.append(m)
         elif m.duration_turns > 1:
             m.duration_turns -= 1
             new_mods.append(m)
         # else: drop when it reaches 0 or 1 turns elapsed to 0
-    u.temp_mods = new_mods
+    u.state.temp_mods = new_mods

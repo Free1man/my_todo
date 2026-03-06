@@ -67,30 +67,28 @@ class TBSEngine:
     ) -> LegalActionsResponse:
         m = sess.mission
         out: list[LegalAction] = []
-        cu = m.units.get(m.current_unit_id)
-        if not cu or not cu.alive:
+        cu = m.current_unit()
+        if not cu or not cu.state.alive:
             return LegalActionsResponse(actions=out)
 
         ok, why = self.handlers[EndTurnAction].evaluate(m, EndTurnAction())
         if ok:
             out.append(LegalAction(action=EndTurnAction(), explanation=why))
 
-        if cu.ap_left >= 1:
+        if cu.state.ap_left >= 1:
             for dst in pathfinding.reachable_tiles(m, cu):
-                if dst != cu.pos:
+                if dst != cu.state.pos:
                     act = MoveAction(unit_id=cu.id, to=dst)
                     ok, why = self.handlers[MoveAction].evaluate(m, act)
                     if ok:
                         out.append(LegalAction(action=act, explanation=why))
 
-        if cu.ap_left >= 1:
+        if cu.state.ap_left >= 1:
             rng = stats.eff_stat(m, cu, StatName.RNG)
-            for other in m.units.values():
-                if (
-                    other.alive
-                    and other.id != cu.id
-                    and pathfinding.manhattan(cu.pos, other.pos) <= rng
-                ):
+            for other in m.living_units():
+                if other.id == cu.id:
+                    continue
+                if pathfinding.manhattan(cu.state.pos, other.state.pos) <= rng:
                     act = AttackAction(attacker_id=cu.id, target_id=other.id)
                     ok, why = self.handlers[AttackAction].evaluate(m, act)
                     if ok:

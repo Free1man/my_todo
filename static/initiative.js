@@ -86,7 +86,7 @@
       const wrap = document.getElementById('init-queue');
       if (!wrap) return;
       if (!state) return;
-      const order = Array.isArray(state.initiative_order) ? state.initiative_order : [];
+      const order = global.initiativeOrder(state);
       const desired = new Set(order.map(String));
 
       // Index existing children by uid
@@ -101,10 +101,10 @@
       order.forEach(uid => {
         const u = state.units[uid];
         if (!u) return;
-  const base = (u.stats && u.stats.base) || {};
+  const base = global.unitBaseStats(u);
   const init = base.init ?? base.INIT ?? base['init'] ?? base['INIT'] ?? 0;
-        const nameShort = (u.name || '').slice(0, 10);
-        const sideFull = (u.side || '').toLowerCase();
+        const nameShort = global.unitName(u).slice(0, 10);
+        const sideFull = global.unitSide(u).toLowerCase();
         const sideShort = sideFull.slice(0, 10);
 
         let card = existing.get(String(uid));
@@ -112,7 +112,7 @@
           card = document.createElement('div');
           card.dataset.uid = String(uid);
           card.innerHTML = `
-            <div class="q-name" title="${u.name}">${nameShort}</div>
+            <div class="q-name" title="${global.unitName(u)}">${nameShort}</div>
             <div class="q-footer">
               <div class="q-side" title="${sideFull}">${sideShort}</div>
               <div class="q-init">${init}</div>
@@ -123,14 +123,14 @@
           const qn = card.querySelector('.q-name');
           const qs = card.querySelector('.q-side');
           const qi = card.querySelector('.q-init');
-          if (qn) { qn.textContent = nameShort; qn.title = u.name; }
+          if (qn) { qn.textContent = nameShort; qn.title = global.unitName(u); }
           if (qs) { qs.textContent = sideShort; qs.title = sideFull; }
           if (qi) { qi.textContent = String(init); }
         }
 
         // Update class
-  card.className = 'queue-item side-' + String(u.side || '').toLowerCase() + (uid === state.current_unit_id ? ' current' : '') + (!u.alive ? ' dead' : '');
-        card.title = `Unit: ${u.name} (${u.side})\nINIT: ${init}`;
+  card.className = 'queue-item side-' + String(global.unitSide(u) || '').toLowerCase() + (uid === global.currentUnitId(state) ? ' current' : '') + (!global.unitAlive(u) ? ' dead' : '');
+        card.title = `Unit: ${global.unitName(u)} (${global.unitSide(u)})\nINIT: ${init}`;
         fragment.appendChild(card);
       });
 

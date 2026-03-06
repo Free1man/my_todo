@@ -21,6 +21,9 @@ def test_defaults_info(base_url: str):
     # Minimal shape check for a mission example
     assert isinstance(mission_ex, dict)
     assert "id" in mission_ex and "map" in mission_ex and "units" in mission_ex
+    assert "turn_state" in mission_ex
+    first_unit = next(iter(mission_ex["units"].values()))
+    assert "template" in first_unit and "state" in first_unit
 
 
 def test_info_examples_are_directly_usable(base_url: str):

@@ -159,7 +159,7 @@ def apply_action(sid: str, req: ApplyActionRequest):
     if new_state.mission.enemy_ai:
         applied, after = enemy_autoplay(engine, new_state)
         new_state = after
-    new_state.mission.status = engine.check_victory_conditions(new_state)
+    new_state.mission.turn_state.status = engine.check_victory_conditions(new_state)
     # Applied action already logged inside engine.apply
 
     storage.save(new_state)

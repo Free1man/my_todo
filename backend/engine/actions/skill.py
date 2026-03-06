@@ -15,7 +15,7 @@ from .base import ActionHandler
 
 
 def _skill_by_id(u: Unit, sid: str):
-    for s in u.skills:
+    for s in u.template.skills:
         if s.id == sid:
             return s
     return None
@@ -26,6 +26,24 @@ def _instanced_modifier(mod: StatModifier) -> StatModifier:
     return mod.model_copy(deep=True)
 
 
+def _split_applied_effects(
+    skill,
+) -> tuple[int | None, int | None, list[StatModifier]]:
+    hp_add: int | None = None
+    hp_override: int | None = None
+    temp_mods: list[StatModifier] = []
+    for mod in skill.apply_mods or []:
+        if mod.stat == StatName.HP:
+            if mod.operation == Operation.ADDITIVE:
+                hp_add = (hp_add or 0) + mod.value
+                continue
+            if mod.operation == Operation.OVERRIDE:
+                hp_override = mod.value
+                continue
+        temp_mods.append(mod)
+    return hp_add, hp_override, temp_mods
+
+
 class SkillHandler(ActionHandler):
     action_type = UseSkillAction
 
@@ -33,18 +51,18 @@ class SkillHandler(ActionHandler):
         if action.unit_id not in mission.units:
             return False, "unknown unit"
         u = mission.units[action.unit_id]
-        if not u.alive or mission.current_unit_id != u.id:
+        if not mission.is_current_actor(u.id):
             return False, "unit cannot act"
         skill = _skill_by_id(u, action.skill_id)
         if skill is None:
             return False, "skill not found"
-        if u.ap_left < skill.ap_cost:
+        if u.state.ap_left < skill.ap_cost:
             return False, "not enough AP"
-        if u.skill_cooldowns.get(skill.id, 0) > 0:
+        if u.state.skill_cooldowns.get(skill.id, 0) > 0:
             return False, "on cooldown"
         if (
             skill.charges is not None
-            and u.skill_charges.get(skill.id, skill.charges) <= 0
+            and u.state.skill_charges.get(skill.id, skill.charges) <= 0
         ):
             return False, "no charges"
 
@@ -52,18 +70,24 @@ class SkillHandler(ActionHandler):
             if not action.target_unit_id or action.target_unit_id not in mission.units:
                 return False, "missing target"
             target = mission.units[action.target_unit_id]
-            if skill.target == SkillTarget.ALLY_UNIT and target.side != u.side:
+            if (
+                skill.target == SkillTarget.ALLY_UNIT
+                and target.template.side != u.template.side
+            ):
                 return False, "target not ally"
-            if skill.target == SkillTarget.ENEMY_UNIT and target.side == u.side:
+            if (
+                skill.target == SkillTarget.ENEMY_UNIT
+                and target.template.side == u.template.side
+            ):
                 return False, "target not enemy"
-            if pathfinding.manhattan(u.pos, target.pos) > skill.range:
+            if pathfinding.manhattan(u.state.pos, target.state.pos) > skill.range:
                 return False, "target out of range"
         elif skill.target == SkillTarget.TILE:
             if action.target_tile is None:
                 return False, "missing target tile"
             if not mission.map.in_bounds(action.target_tile):
                 return False, "tile out of bounds"
-            if pathfinding.manhattan(u.pos, action.target_tile) > skill.range:
+            if pathfinding.manhattan(u.state.pos, action.target_tile) > skill.range:
                 return False, "tile out of range"
         return True, "ok"
 
@@ -71,12 +95,12 @@ class SkillHandler(ActionHandler):
         mission = sess.mission
         u = mission.units[action.unit_id]
         skill = _skill_by_id(u, action.skill_id)
-        u.ap_left -= skill.ap_cost
+        u.state.ap_left -= skill.ap_cost
         if skill.cooldown > 0:
-            u.skill_cooldowns[skill.id] = skill.cooldown
+            u.state.skill_cooldowns[skill.id] = skill.cooldown
         if skill.charges is not None:
-            u.skill_charges[skill.id] = max(
-                0, u.skill_charges.get(skill.id, skill.charges) - 1
+            u.state.skill_charges[skill.id] = max(
+                0, u.state.skill_charges.get(skill.id, skill.charges) - 1
             )
 
         def _apply_hp_with_cap(
@@ -84,24 +108,25 @@ class SkillHandler(ActionHandler):
         ):
             max_hp_cap = stats.eff_stat(mission, target_unit, StatName.MAX_HP)
             if delta is not None:
-                cur = target_unit.stats.base.get(StatName.HP, 0)
+                cur = target_unit.template.stats.base.get(StatName.HP, 0)
                 new_hp = cur + delta
                 new_hp = min(max_hp_cap, new_hp)
-                target_unit.stats.base[StatName.HP] = max(0, new_hp)
-                target_unit.alive = target_unit.stats.base[StatName.HP] > 0
+                target_unit.template.stats.base[StatName.HP] = max(0, new_hp)
+                target_unit.state.alive = (
+                    target_unit.template.stats.base[StatName.HP] > 0
+                )
             if override is not None:
                 val = override
                 val = min(max_hp_cap, val)
-                target_unit.stats.base[StatName.HP] = max(0, val)
-                target_unit.alive = target_unit.stats.base[StatName.HP] > 0
+                target_unit.template.stats.base[StatName.HP] = max(0, val)
+                target_unit.state.alive = (
+                    target_unit.template.stats.base[StatName.HP] > 0
+                )
+
+        hp_add, hp_override, temp_mod_bases = _split_applied_effects(skill)
 
         if skill.target == SkillTarget.TILE and action.target_tile is not None:
             tx, ty = action.target_tile
-            hp_delta = None
-            for m in skill.apply_mods or []:
-                if m.stat == StatName.HP and m.operation == Operation.ADDITIVE:
-                    hp_delta = m.value
-                    break
             offsets = action.area_offsets or [
                 (-1, -1),
                 (-1, 0),
@@ -117,34 +142,11 @@ class SkillHandler(ActionHandler):
                 x, y = tx + dx, ty + dy
                 if not mission.map.in_bounds((x, y)):
                     continue
-                for t in mission.units.values():
-                    if not t.alive or t.pos != (x, y):
-                        continue
-                    if hp_delta is not None:
-                        if hp_delta < 0 and t.side == u.side:
-                            continue
-                        if hp_delta > 0 and t.side != u.side:
-                            continue
-                        _apply_hp_with_cap(t, hp_delta)
-                    temp_mods: list[StatModifier] = []
-                    for m in skill.apply_mods or []:
-                        if m.stat == StatName.HP:
-                            continue
-                        if (
-                            m.operation == Operation.ADDITIVE
-                            and m.value < 0
-                            and t.side == u.side
-                        ):
-                            continue
-                        if (
-                            m.operation == Operation.ADDITIVE
-                            and m.value > 0
-                            and t.side != u.side
-                        ):
-                            continue
-                        temp_mods.append(_instanced_modifier(m))
+                for target_unit in mission.units_at((x, y)):
+                    _apply_hp_with_cap(target_unit, hp_add, hp_override)
+                    temp_mods = [_instanced_modifier(mod) for mod in temp_mod_bases]
                     if temp_mods:
-                        t.temp_mods.extend(temp_mods)
+                        target_unit.state.temp_mods.extend(temp_mods)
         else:
             target_unit = u
             if (
@@ -152,22 +154,10 @@ class SkillHandler(ActionHandler):
                 and action.target_unit_id
             ):
                 target_unit = mission.units[action.target_unit_id]
-            temp_mods: list[StatModifier] = []
-            hp_add: int | None = None
-            hp_override: int | None = None
-            for m in skill.apply_mods or []:
-                if m.stat == StatName.HP:
-                    if m.operation == Operation.ADDITIVE:
-                        hp_add = (hp_add or 0) + m.value
-                    elif m.operation == Operation.OVERRIDE:
-                        hp_override = m.value
-                    else:
-                        temp_mods.append(_instanced_modifier(m))
-                else:
-                    temp_mods.append(_instanced_modifier(m))
+            temp_mods = [_instanced_modifier(mod) for mod in temp_mod_bases]
             _apply_hp_with_cap(target_unit, hp_add, hp_override)
             if temp_mods:
-                target_unit.temp_mods.extend(temp_mods)
+                target_unit.state.temp_mods.extend(temp_mods)
 
         log_event(sess, action, ActionLogResult.APPLIED)
         return TBSSession(id=sess.id, mission=mission)
@@ -175,12 +165,12 @@ class SkillHandler(ActionHandler):
 
 def enumerate_legal(mission, u: Unit, handlers, explain: bool):
     out: list[LegalAction] = []
-    for s in u.skills:
-        if u.ap_left < s.ap_cost:
+    for s in u.template.skills:
+        if u.state.ap_left < s.ap_cost:
             continue
-        if u.skill_cooldowns.get(s.id, 0) > 0:
+        if u.state.skill_cooldowns.get(s.id, 0) > 0:
             continue
-        if s.charges is not None and u.skill_charges.get(s.id, s.charges) <= 0:
+        if s.charges is not None and u.state.skill_charges.get(s.id, s.charges) <= 0:
             continue
         if s.target in (SkillTarget.SELF, SkillTarget.NONE):
             act = UseSkillAction(unit_id=u.id, skill_id=s.id)
@@ -188,10 +178,8 @@ def enumerate_legal(mission, u: Unit, handlers, explain: bool):
             if ok:
                 out.append(LegalAction(action=act, explanation=why))
         elif s.target == SkillTarget.ALLY_UNIT:
-            for ally in mission.units.values():
-                if not ally.alive or ally.side != u.side:
-                    continue
-                if pathfinding.manhattan(u.pos, ally.pos) <= s.range:
+            for ally in mission.allies_of(u, include_self=True):
+                if pathfinding.manhattan(u.state.pos, ally.state.pos) <= s.range:
                     act = UseSkillAction(
                         unit_id=u.id, skill_id=s.id, target_unit_id=ally.id
                     )
@@ -199,10 +187,8 @@ def enumerate_legal(mission, u: Unit, handlers, explain: bool):
                     if ok:
                         out.append(LegalAction(action=act, explanation=why))
         elif s.target == SkillTarget.ENEMY_UNIT:
-            for foe in mission.units.values():
-                if not foe.alive or foe.side == u.side:
-                    continue
-                if pathfinding.manhattan(u.pos, foe.pos) <= s.range:
+            for foe in mission.enemies_of(u):
+                if pathfinding.manhattan(u.state.pos, foe.state.pos) <= s.range:
                     act = UseSkillAction(
                         unit_id=u.id, skill_id=s.id, target_unit_id=foe.id
                     )
@@ -212,7 +198,7 @@ def enumerate_legal(mission, u: Unit, handlers, explain: bool):
         elif s.target == SkillTarget.TILE:
             for ty in range(mission.map.height):
                 for tx in range(mission.map.width):
-                    if pathfinding.manhattan(u.pos, (tx, ty)) <= s.range:
+                    if pathfinding.manhattan(u.state.pos, (tx, ty)) <= s.range:
                         act = UseSkillAction(
                             unit_id=u.id, skill_id=s.id, target_tile=(tx, ty)
                         )

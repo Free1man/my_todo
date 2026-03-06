@@ -26,7 +26,7 @@ def enemy_autoplay(
     cur = sess
     while applied < max_chain:
         # Only act for enemy side; stop if it's player's turn
-        if cur.mission.side_to_move != Side.ENEMY:
+        if cur.mission.turn_state.side_to_move != Side.ENEMY:
             break
         # Ask for explain=True so attacks include expected_damage/AP details for scoring
         la = engine.list_legal_actions(cur, explain=True)

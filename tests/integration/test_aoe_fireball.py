@@ -17,14 +17,15 @@ def test_fireball_cross_shape_hits_all_in_cross(base_url: str):
     """Cross-shaped Fireball (plus shape) should hit center-adjacent tiles and not diagonals.
     Place one unit in the center (target tile is center), and four around it (up,down,left,right).
     Verify all four around get damaged; center gets damaged too; diagonals remain unharmed.
+    The caster is also standing on the center tile and should take friendly-fire damage.
     """
     # Setup player caster with Fireball and enough AP
     caster = hero_template()
     caster.id = "caster"
-    caster.pos = (2, 2)
-    caster.items = []
-    caster.skills = [fireball_skill_template(power=3, rng=5, ap_cost=1)]
-    caster.stats.base[StatName.INIT] = 100
+    caster.state.pos = (2, 2)
+    caster.template.items = []
+    caster.template.skills = [fireball_skill_template(power=3, rng=5, ap_cost=1)]
+    caster.template.stats.base[StatName.INIT] = 100
 
     # Enemies: 4 on cross arms, 1 on center, 4 on diagonals for sanity
     foes = []
@@ -34,16 +35,16 @@ def test_fireball_cross_shape_hits_all_in_cross(base_url: str):
     for i, p in enumerate(positions_hit):
         g = goblin_template()
         g.id = f"hit_{i}"
-        g.pos = p
+        g.state.pos = p
         foes.append(g)
     for i, p in enumerate(positions_miss):
         g = goblin_template()
         g.id = f"miss_{i}"
-        g.pos = p
+        g.state.pos = p
         foes.append(g)
 
     mission = simple_mission([caster, *foes], width=5, height=5)
-    mission.current_unit_id = caster.id
+    mission.turn_state.current_unit_id = caster.id
 
     sid, sess = _create_tbs_session(base_url, mission)
 
@@ -66,6 +67,7 @@ def test_fireball_cross_shape_hits_all_in_cross(base_url: str):
     # Expect all in positions_hit to lose 3 HP, center included if an enemy is there
     for uid in [f"hit_{i}" for i in range(len(positions_hit))]:
         assert _hp_of(sess, uid) == hp_before[uid] - 3
+    assert _hp_of(sess, "caster") == hp_before["caster"] - 3
     # Diagonals should be unaffected
     for uid in [f"miss_{i}" for i in range(len(positions_miss))]:
         assert _hp_of(sess, uid) == hp_before[uid]
@@ -78,21 +80,21 @@ def test_fireball_default_3x3_hits_corners_when_aimed_center(base_url: str):
     """
     caster = hero_template()
     caster.id = "caster"
-    caster.pos = (2, 2)
-    caster.items = []
-    caster.skills = [fireball_skill_template(power=2, rng=5, ap_cost=1)]
-    caster.stats.base[StatName.INIT] = 100
+    caster.state.pos = (2, 2)
+    caster.template.items = []
+    caster.template.skills = [fireball_skill_template(power=2, rng=5, ap_cost=1)]
+    caster.template.stats.base[StatName.INIT] = 100
 
     corners = [(1, 1), (3, 1), (1, 3), (3, 3)]
     foes = []
     for i, p in enumerate(corners):
         g = goblin_template()
         g.id = f"corner_{i}"
-        g.pos = p
+        g.state.pos = p
         foes.append(g)
 
     mission = simple_mission([caster, *foes], width=5, height=5)
-    mission.current_unit_id = caster.id
+    mission.turn_state.current_unit_id = caster.id
 
     sid, sess = _create_tbs_session(base_url, mission)
 
@@ -110,6 +112,7 @@ def test_fireball_default_3x3_hits_corners_when_aimed_center(base_url: str):
 
     for uid in [f"corner_{i}" for i in range(4)]:
         assert _hp_of(sess, uid) == hp_before[uid] - 2
+    assert _hp_of(sess, "caster") == hp_before["caster"] - 2
 
 
 @pytest.mark.timeout(30)
@@ -119,10 +122,12 @@ def test_fireball_two_tile_shape_can_kill_enemy(base_url: str):
     """
     caster = hero_template()
     caster.id = "caster"
-    caster.pos = (2, 2)
-    caster.items = []
-    caster.skills = [fireball_skill_template(power=20, rng=5, ap_cost=1)]  # high dmg
-    caster.stats.base[StatName.INIT] = 100
+    caster.state.pos = (2, 2)
+    caster.template.items = []
+    caster.template.skills = [
+        fireball_skill_template(power=20, rng=5, ap_cost=1)
+    ]  # high dmg
+    caster.template.stats.base[StatName.INIT] = 100
 
     # Two-tile shape: center and one tile to the right
     two_tile_offsets = [(0, 0), (1, 0)]
@@ -130,15 +135,15 @@ def test_fireball_two_tile_shape_can_kill_enemy(base_url: str):
     # Enemy inside AoE (to be killed)
     kill_me = goblin_template()
     kill_me.id = "kill_me"
-    kill_me.pos = (3, 2)  # (2,2) + (1,0)
+    kill_me.state.pos = (3, 2)  # (2,2) + (1,0)
 
     # Enemy outside AoE (should not be hit)
     miss = goblin_template()
     miss.id = "miss"
-    miss.pos = (1, 1)
+    miss.state.pos = (1, 1)
 
     mission = simple_mission([caster, kill_me, miss], width=5, height=5)
-    mission.current_unit_id = caster.id
+    mission.turn_state.current_unit_id = caster.id
 
     sid, sess = _create_tbs_session(base_url, mission)
 
@@ -154,7 +159,9 @@ def test_fireball_two_tile_shape_can_kill_enemy(base_url: str):
 
     sess = _apply(base_url, sid, payload)
 
-    # kill_me should be reduced to 0 HP; miss unchanged; caster (ally) on center tile unaffected
+    # kill_me and caster are inside the area and both should be hit; miss stays untouched.
     assert _hp_of(sess, "kill_me") == 0
-    assert sess["mission"]["units"]["kill_me"]["alive"] is False
+    assert sess["mission"]["units"]["kill_me"]["state"]["alive"] is False
+    assert _hp_of(sess, "caster") == 0
+    assert sess["mission"]["units"]["caster"]["state"]["alive"] is False
     assert _hp_of(sess, "miss") == hp_before["miss"]
