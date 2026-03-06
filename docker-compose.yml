@@ -1,8 +1,7 @@
 services:
   redis:
     image: redis:alpine
-    ports:
-      - "6379:6379"
+    ports: ["6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -18,14 +17,12 @@ services:
         PROD: ${PROD:-true}
     ports:
       - "${PORT:-8000}:8000"
-    env_file:
-      - .env
+    env_file: [.env]
     environment:
       REDIS_URL: redis://redis:6379/0
       MAX_SESSIONS: 50
-      EVICT_ON_GET: true
-    depends_on:
-      - redis
+      EVICT_ON_GET: "true"
+    depends_on: [redis]
     volumes:
       - ./:/app
     healthcheck:
@@ -51,16 +48,24 @@ services:
       api:
         condition: service_healthy
     environment:
-      # What the EXPORTED binary should use by default on your host
+      # Toggle editor vs build/export:
+      GODOT_EDITOR: ${GODOT_EDITOR:-false}
+      # What the EXPORTED binary should use by default on your host:
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+      # Let the editor draw windows on your host (X11):
+      DISPLAY: ${DISPLAY:-:0}
     volumes:
+      # export outputs
       - ./dist/godot_csharp:/out
-      # Bind mount the project so code changes don't require image rebuilds
+      # your project code
       - ./clients/godot_csharp:/game
-      # Persist the downloaded Godot editor and export templates across runs
+      # X11 socket for GUI when editor is enabled
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      # persist the downloaded editor + export templates (optional)
       - godot-sdk:/opt/Godot_v4.4.1-stable_mono_linux_x86_64
       - godot-templates:/root/.local/share/godot/export_templates/4.4.1.stable.mono
     working_dir: /game
+    # keep ENTRYPOINT from the image; it will read GODOT_EDITOR and act
     command: ""
 
 volumes:

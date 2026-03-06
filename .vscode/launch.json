@@ -17,6 +17,48 @@
       "console": "integratedTerminal",
       "justMyCode": true,
       "cwd": "${workspaceFolder}"
+    },
+    {
+        "name": "Play in Editor",
+        "type": "godot-mono",
+        "mode": "playInEditor",
+        "request": "launch"
+    },
+    {
+        "name": "Launch",
+        "type": "godot-mono",
+        "request": "launch",
+        "mode": "executable",
+        "preLaunchTask": "build",
+        "executable": "/home/ilia/.local/bin/godot4m",
+        // See which arguments are available here:
+        // https://docs.godotengine.org/en/stable/getting_started/editor/command_line_tutorial.html
+        "executableArguments": [
+            "--path",
+            "${workspaceRoot}"
+        ]
+    },
+    {
+        "name": "Launch (Select Scene)",
+        "type": "godot-mono",
+        "request": "launch",
+        "mode": "executable",
+        "preLaunchTask": "build",
+        "executable": "/home/ilia/.local/bin/godot4m",
+        // See which arguments are available here:
+        // https://docs.godotengine.org/en/stable/getting_started/editor/command_line_tutorial.html
+        "executableArguments": [
+            "--path",
+            "${workspaceRoot}",
+            "${command:SelectLaunchScene}"
+        ]
+    },
+    {
+        "name": "Attach",
+        "type": "godot-mono",
+        "request": "attach",
+        "address": "localhost",
+        "port": 23685
     }
   ],
   "compounds": [

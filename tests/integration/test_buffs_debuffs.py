@@ -1,7 +1,15 @@
 import json
 
 from backend.models.api import AttackAction, UseSkillAction
-from backend.models.enums import StatName
+from backend.models.enums import (
+    ModifierSource,
+    Operation,
+    SkillKind,
+    SkillTarget,
+    StatName,
+)
+from backend.models.modifiers import StatModifier
+from backend.models.skills import Skill
 from tests.integration.utils.data import (
     goblin_template,
     heal_skill_template,
@@ -164,3 +172,140 @@ def test_weaken_enemy_attack_reduces_damage(base_url: str):
     # Debuff expired: damage should be back to baseline and also higher than with-debuff
     assert dmg_after_expire == dmg_without_debuff
     assert dmg_after_expire > dmg_with_debuff
+
+
+def test_cooldown_ticks_only_on_owner_turns(base_url: str):
+    player = hero_template()
+    player.id = "player"
+    player.pos = (1, 1)
+    player.items = []
+    player.stats.base[StatName.INIT] = 100
+    player.skills = [
+        Skill(
+            id="skill.self.focus",
+            name="Focus",
+            kind=SkillKind.ACTIVE,
+            ap_cost=1,
+            range=0,
+            target=SkillTarget.SELF,
+            cooldown=2,
+            apply_mods=[
+                StatModifier(
+                    stat=StatName.ATK,
+                    operation=Operation.ADDITIVE,
+                    value=1,
+                    source=ModifierSource.SKILL,
+                    duration_turns=2,
+                )
+            ],
+        )
+    ]
+
+    ally = hero_template()
+    ally.id = "ally"
+    ally.pos = (0, 1)
+    ally.stats.base[StatName.INIT] = 60
+    ally.skills = []
+
+    enemy = goblin_template()
+    enemy.id = "enemy"
+    enemy.pos = (1, 2)
+    enemy.stats.base[StatName.INIT] = 20
+
+    mission = simple_mission([player, ally, enemy], width=4, height=4)
+    mission.current_unit_id = player.id
+
+    sid, sess = _create_tbs_session(base_url, mission)
+    assert sess["mission"]["current_unit_id"] == "player"
+
+    focus = UseSkillAction(unit_id="player", skill_id="skill.self.focus")
+    focus_payload = json.loads(focus.model_dump_json())
+    sess = _apply(base_url, sid, focus_payload)
+    assert (
+        sess["mission"]["units"]["player"]["skill_cooldowns"]["skill.self.focus"] == 2
+    )
+
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
+    assert sess["mission"]["current_unit_id"] == "ally"
+    assert (
+        sess["mission"]["units"]["player"]["skill_cooldowns"]["skill.self.focus"] == 2
+    )
+
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
+    assert sess["mission"]["current_unit_id"] == "enemy"
+    assert (
+        sess["mission"]["units"]["player"]["skill_cooldowns"]["skill.self.focus"] == 2
+    )
+
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
+    assert sess["mission"]["current_unit_id"] == "player"
+    assert (
+        sess["mission"]["units"]["player"]["skill_cooldowns"]["skill.self.focus"] == 1
+    )
+    assert not _evaluate(base_url, sid, focus_payload).get("legal", False)
+
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
+    assert sess["mission"]["current_unit_id"] == "player"
+    assert sess["mission"]["units"]["player"]["skill_cooldowns"] == {}
+    assert _evaluate(base_url, sid, focus_payload).get("legal")
+
+
+def test_temp_modifiers_are_instanced_per_target(base_url: str):
+    player = hero_template()
+    player.id = "player"
+    player.pos = (1, 1)
+    player.items = []
+    player.stats.base[StatName.INIT] = 100
+    player.skills = [
+        Skill(
+            id="skill.tile.sunder",
+            name="Sunder Field",
+            kind=SkillKind.ACTIVE,
+            ap_cost=1,
+            range=3,
+            target=SkillTarget.TILE,
+            cooldown=0,
+            apply_mods=[
+                StatModifier(
+                    stat=StatName.ATK,
+                    operation=Operation.ADDITIVE,
+                    value=-2,
+                    source=ModifierSource.SKILL,
+                    duration_turns=2,
+                )
+            ],
+        )
+    ]
+
+    enemy_fast = goblin_template()
+    enemy_fast.id = "enemy_fast"
+    enemy_fast.pos = (1, 2)
+    enemy_fast.stats.base[StatName.INIT] = 50
+
+    enemy_slow = goblin_template()
+    enemy_slow.id = "enemy_slow"
+    enemy_slow.pos = (2, 1)
+    enemy_slow.stats.base[StatName.INIT] = 10
+
+    mission = simple_mission([player, enemy_fast, enemy_slow], width=4, height=4)
+    mission.current_unit_id = player.id
+
+    sid, sess = _create_tbs_session(base_url, mission)
+    action = UseSkillAction(
+        unit_id="player",
+        skill_id="skill.tile.sunder",
+        target_tile=(1, 1),
+        area_offsets=[(0, 1), (1, 0)],
+    )
+    payload = json.loads(action.model_dump_json())
+
+    sess = _apply(base_url, sid, payload)
+    assert sess["mission"]["units"]["enemy_fast"]["temp_mods"][0]["duration_turns"] == 2
+    assert sess["mission"]["units"]["enemy_slow"]["temp_mods"][0]["duration_turns"] == 2
+
+    sess = _apply(base_url, sid, {"kind": "end_turn"})
+    assert sess["mission"]["current_unit_id"] == "enemy_fast"
+    assert sess["mission"]["units"]["enemy_fast"]["temp_mods"][0]["duration_turns"] == 1
+    assert sess["mission"]["units"]["enemy_slow"]["temp_mods"][0]["duration_turns"] == 2

@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://tbs-minimal"]
+[gd_scene load_steps=2 format=3 uid="uid://cag4ba4ia3emo"]
 
-[ext_resource type="Script" path="res://MinimalTbsViewer.cs" id="1"]
+[ext_resource type="Script" uid="uid://bn0w32hk8heye" path="res://MinimalTbsViewer.cs" id="1"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1")

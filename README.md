@@ -1,133 +1,148 @@
-# Abstract Tactics - TBS Game Platform
+# Abstract Tactics – Commands Cheat Sheet
 
-A minimal turn-based tactics platform with backend API and web UI for a Turn-Based Strategy (TBS) ruleset.
+Minimal list of the most useful commands for daily work. (Original descriptive README replaced intentionally.)
 
-## Features
-
-- **Web UI**: Minimal, responsive interface for game selection and play
-- **API Backend**: FastAPI with async endpoints and detailed explanations
-- **Game Rulesets**: TBS with extensible architecture
-- **Session Management**: Redis-backed persistence (with memory fallback)
-- **Docker Support**: Complete containerized setup
-
-## Quick Start
-
-### With Docker (Recommended)
+## 1. Start / Stop Stack (Docker)
 ```bash
-# Build and run with auto-reload
+# Build images
 docker compose build
+
+# Dev run (auto-reload, not prod):
 PROD=false docker compose up
 
+# Detached
+PROD=false docker compose up -d
 
-# 1) Start API
-docker compose up -d api
+# "Prod" flavored run (set env var or edit compose file as needed)
+PROD=true docker compose up -d
 
-# 2) Build/export (project is bind-mounted, artifacts to dist/)
-docker compose run --rm godot-cs-build
+# Stop
+docker compose down
 
-
-# Open the web UI at http://localhost:8000
+# Stop & remove volumes (DANGEROUS – wipes redis data)
+docker compose down -v
 ```
 
-### Local Development
+## 2. File Permissions (after Docker-created files)
 ```bash
-# Install dependencies
+sudo chown -R "$(id -u)":"$(id -g)" .
+```
+
+## 3. API Local (No Docker)
+```bash
 poetry install --with dev
-
-# Start the API server
 poetry run uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
 
-# Open http://localhost:8000 in your browser
+# If VS Code is using .venv but your shell is not:
+source .venv/bin/activate
+python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+
+# Or without activating:
+./.venv/bin/python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-## Web UI Features
-
-- **Game Creation**: Start new TBS games with default settings
-- **Interactive Play**: Click-driven grid with move/attack/end turn
-- **Session Persistence**: Save and resume games
-
-## API Endpoints
-
-- `GET /` - Web UI home page
-- `GET /health` - Health check with storage status
-- `GET /rulesets` - List available game types
-- `GET /sessions` - List all game sessions
-- `POST /sessions` - Create new game session
-- `GET /sessions/{id}` - Get specific game session
- - `GET /sessions/{id}/legal_actions` - List pre-evaluated legal actions (use `?explain=true` for detailed breakdowns)
-- `POST /sessions/{id}/action` - Apply game action
-
-## Game Rules
-
-### TBS (Turn-Based Strategy)
-- Grid-based tactical combat
-- Units with health, attack, defense, and movement
-- Turn-based gameplay with action points
-- Items and equipment system
-
-## Development
-
+## 4. Logs & Shell
 ```bash
-# Run tests
-poetry run pytest -q
+# Follow API logs
+docker compose logs -f api
 
-# Run integration tests
-poetry run pytest tests/integration/
+# Open shell inside API container
+docker compose exec api bash
 
-# Format code
-poetry run black .
+# Redis CLI
+docker compose exec redis redis-cli
 ```
 
-## Architecture
-
-- **Backend**: FastAPI with Pydantic models
-- **Storage**: Redis for cross-worker sessions
-- **Frontend**: Vanilla JavaScript (no frameworks)
-- **Games**: Plugin-based ruleset system
-- **Testing**: Pytest with integration test support
-
-## Docker Services
-
-- **api**: FastAPI application with static file serving
-- **redis**: Redis database for session storage
- - **godot-cs-build**: One-shot builder that exports a minimal Godot 4 C# desktop client (artifacts land in `dist/godot_csharp/`)
-
-## Health Monitoring
-
-The `/health` endpoint provides:
-```json
-{
-  "ok": true,
-  "storage": "redis",
-  "redis_connected": true
-}
-```
-
-## Troubleshooting
-
-- **UI not loading**: Ensure static files are being served
-- **Games not creating**: Check ruleset registration
-- **Redis issues**: Verify Redis container is running
-- **API errors**: Check logs with `docker compose logs api`
-
-## Godot 4 C# Minimal Client
-
-Build and export native binaries via Docker (no local Godot install needed):
-
+## 5. Health & Basic API Calls
 ```bash
-# Exports Linux and Windows builds into dist/godot_csharp/
+curl -s http://localhost:8000/health | jq
+curl -s http://localhost:8000/rulesets | jq
+curl -s http://localhost:8000/sessions | jq
+
+# Create session (example ruleset "tbs")
+curl -s -X POST http://localhost:8000/sessions \
+  -H 'Content-Type: application/json' \
+  -d '{"ruleset":"tbs"}' | jq
+
+# Get legal actions
+curl -s http://localhost:8000/sessions/<SESSION_ID>/legal_actions | jq
+
+# Apply action (replace payload)
+curl -s -X POST http://localhost:8000/sessions/<SESSION_ID>/action \
+  -H 'Content-Type: application/json' \
+  -d '{"action_type":"end_turn"}' | jq
+```
+
+## 6. Tests & Formatting
+```bash
+poetry run pytest -q                # All tests
+poetry run pytest tests/integration # Integration only
+poetry run black .                  # Format
+
+# If poetry/pytest is not on your shell PATH, use the workspace venv directly:
+./.venv/bin/python -m pytest -q tests
+./.venv/bin/python -m pytest -q tests/integration
+
+# Makefile wrappers (always use .venv/bin/python)
+make test
+make integration
+
+# If the API is already running, skip Docker startup in the test fixture:
+BASE_URL=http://127.0.0.1:8000 make integration
+```
+
+Integration tests also need Docker access because [`tests/integration/conftest.py`](/home/ilia/my_todo/tests/integration/conftest.py) starts or reuses the `api` and `redis` services when `BASE_URL` is not already set.
+
+## 7. Godot C# Client Export
+```bash
+# Build/export desktop clients to dist/godot_csharp/
 docker compose run --rm godot-cs-build
+
+# Rebuild only that service image
+docker compose build godot-cs-build
 ```
 
-Artifacts will appear on your host:
+Artifacts go to:
+- dist/godot_csharp/linux/
+- dist/godot_csharp/windows/
 
-- `dist/godot_csharp/linux/TBS-Minimal.x86_64`
-- `dist/godot_csharp/windows/TBS-Minimal.exe`
-
-Run either outside Docker. The client targets `http://localhost:8000` by default. Start the API first:
-
+## 8. Maintenance / Cleanup
 ```bash
-docker compose up
-# or locally
-poetry run uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+# Clear Redis data (ALL KEYS!)
+docker compose exec redis redis-cli FLUSHALL
+
+# Remove dangling images
+docker image prune -f
+
+# Rebuild everything fresh
+docker compose build --no-cache
 ```
+
+## 9. Quick Troubleshooting
+```bash
+# Check container statuses
+docker compose ps
+
+# Verify API reachable
+curl -I http://localhost:8000/health
+
+# Permission reset (again if needed)
+sudo chown -R "$(id -u)":"$(id -g)" .
+```
+
+## 10. Common Environment Variables
+```bash
+PROD=false   # Development defaults
+PROD=true    # Production-like behavior (if referenced in code/compose)
+```
+
+## 11. One-Liners
+```bash
+# Start dev stack fresh
+docker compose down -v && docker compose build && PROD=false docker compose up
+
+# Run tests inside API container (if poetry installed there)
+docker compose exec api poetry run pytest -q
+```
+
+---

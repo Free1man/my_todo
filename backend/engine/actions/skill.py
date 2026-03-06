@@ -21,6 +21,11 @@ def _skill_by_id(u: Unit, sid: str):
     return None
 
 
+def _instanced_modifier(mod: StatModifier) -> StatModifier:
+    """Detach applied effects from the skill template so each target tracks duration independently."""
+    return mod.model_copy(deep=True)
+
+
 class SkillHandler(ActionHandler):
     action_type = UseSkillAction
 
@@ -68,7 +73,7 @@ class SkillHandler(ActionHandler):
         skill = _skill_by_id(u, action.skill_id)
         u.ap_left -= skill.ap_cost
         if skill.cooldown > 0:
-            u.skill_cooldowns[skill.id] = skill.cooldown + 1
+            u.skill_cooldowns[skill.id] = skill.cooldown
         if skill.charges is not None:
             u.skill_charges[skill.id] = max(
                 0, u.skill_charges.get(skill.id, skill.charges) - 1
@@ -137,7 +142,7 @@ class SkillHandler(ActionHandler):
                             and t.side != u.side
                         ):
                             continue
-                        temp_mods.append(m)
+                        temp_mods.append(_instanced_modifier(m))
                     if temp_mods:
                         t.temp_mods.extend(temp_mods)
         else:
@@ -157,9 +162,9 @@ class SkillHandler(ActionHandler):
                     elif m.operation == Operation.OVERRIDE:
                         hp_override = m.value
                     else:
-                        temp_mods.append(m)
+                        temp_mods.append(_instanced_modifier(m))
                 else:
-                    temp_mods.append(m)
+                    temp_mods.append(_instanced_modifier(m))
             _apply_hp_with_cap(target_unit, hp_add, hp_override)
             if temp_mods:
                 target_unit.temp_mods.extend(temp_mods)
