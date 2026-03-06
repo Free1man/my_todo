@@ -17,6 +17,10 @@ r = Redis.from_url(REDIS_URL, decode_responses=True)
 
 INDEX = "sess:index"  # sorted-set: member=sid, score=last touch (unix seconds)
 ACTION_LOG_MAX = int(os.getenv("ACTION_LOG_MAX", "200"))
+TOUCH_COOLDOWN_SECONDS = float(os.getenv("SESSION_TOUCH_COOLDOWN_SECONDS", "0.25"))
+_SESSION_ADAPTER = TypeAdapter(TBSSession)
+_hot_sessions: dict[str, TBSSession] = {}
+_last_touch_at: dict[str, float] = {}
 
 
 def _log_key(sid: str) -> str:
@@ -57,9 +61,36 @@ def _k(sid: str) -> str:
     return f"sess:{sid}"
 
 
+def _cache_put(sess: TBSSession) -> None:
+    _hot_sessions[sess.id] = sess
+
+
+def _cache_get(sid: str) -> TBSSession | None:
+    return _hot_sessions.get(sid)
+
+
+def _cache_drop(sid: str) -> None:
+    _hot_sessions.pop(sid, None)
+    _last_touch_at.pop(sid, None)
+
+
 def _touch(sid: str) -> None:
     # update "last used" timestamp
     r.zadd(INDEX, {sid: time.time()})
+
+
+def _maybe_touch(sid: str, *, force: bool = False) -> None:
+    if force:
+        _touch(sid)
+        _last_touch_at[sid] = time.monotonic()
+        return
+
+    now = time.monotonic()
+    last = _last_touch_at.get(sid, 0.0)
+    if now - last < TOUCH_COOLDOWN_SECONDS:
+        return
+    _touch(sid)
+    _last_touch_at[sid] = now
 
 
 def _enforce_cap() -> None:
@@ -75,6 +106,7 @@ def _enforce_cap() -> None:
     pipe = r.pipeline()
     for sid, _ in evicted:
         pipe.delete(_k(sid))
+        _cache_drop(sid)
     # also remove logs for evicted sessions
     pipe.delete(_log_key(sid))
     pipe.execute()
@@ -83,21 +115,32 @@ def _enforce_cap() -> None:
 def save(sess: TBSSession) -> None:
     # write payload
     r.set(_k(sess.id), sess.model_dump_json())
+    _cache_put(sess)
     # index/update recency and enforce cap
-    _touch(sess.id)
+    _maybe_touch(sess.id, force=True)
     _enforce_cap()
 
 
 def get(sid: str) -> TBSSession | None:
+    cached = _cache_get(sid)
+    if cached is not None:
+        if EVICT_ON_GET:
+            _maybe_touch(sid)
+            _enforce_cap()
+        return cached
+
     raw = r.get(_k(sid))
     if raw is None:
         # cleanup stale index entry if it exists
         r.zrem(INDEX, sid)
+        _cache_drop(sid)
         return None
+    sess = _SESSION_ADAPTER.validate_json(raw)
+    _cache_put(sess)
     if EVICT_ON_GET:
-        _touch(sid)  # makes policy LRU
+        _maybe_touch(sid)  # makes policy LRU
         _enforce_cap()  # optional; cheap and keeps things tidy
-    return TypeAdapter(TBSSession).validate_json(raw)
+    return sess
 
 
 def delete(sid: str) -> bool:
@@ -105,6 +148,7 @@ def delete(sid: str) -> bool:
     pipe.delete(_k(sid))
     pipe.zrem(INDEX, sid)
     res = pipe.execute()
+    _cache_drop(sid)
     # res[0] is DEL result (0/1)
     return bool(res and res[0])
 
@@ -118,12 +162,16 @@ def list_all() -> list[TBSSession]:
     stale_sids = []
     for i, raw in enumerate(raw_sessions):
         if raw:
-            sessions.append(TypeAdapter(TBSSession).validate_json(raw))
+            sess = _SESSION_ADAPTER.validate_json(raw)
+            sessions.append(sess)
+            _cache_put(sess)
         else:
             stale_sids.append(sids[i])
 
     if stale_sids:
         r.zrem(INDEX, *stale_sids)
+        for sid in stale_sids:
+            _cache_drop(sid)
 
     return sessions
 
