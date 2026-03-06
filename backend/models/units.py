@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-from importlib import import_module
-from typing import TYPE_CHECKING
-
 from pydantic import BaseModel, Field
 
 from .enums import Coord, Side, StatName
 from .modifiers import StatBlock, StatModifier
-
-if TYPE_CHECKING:
-    from .skills import Aura, Injury, Item, Skill
+from .skills import Aura, Injury, Item, Skill
 
 
 class UnitTemplate(BaseModel):
@@ -18,7 +13,6 @@ class UnitTemplate(BaseModel):
     stats: StatBlock = Field(
         default_factory=lambda: StatBlock(
             base={
-                StatName.HP: 10,
                 StatName.MAX_HP: 10,
                 StatName.AP: 2,
                 StatName.ATK: 3,
@@ -39,7 +33,7 @@ class UnitTemplate(BaseModel):
 
 class BattleUnitState(BaseModel):
     pos: Coord = (0, 0)
-    alive: bool = True
+    hp: int = 10
     ap_left: int = 0
     # Temporary buffs/debuffs applied by skills; decays each turn via engine.effects
     temp_mods: list[StatModifier] = Field(default_factory=list)
@@ -51,15 +45,3 @@ class Unit(BaseModel):
     id: str = "unit.example"
     template: UnitTemplate = Field(default_factory=UnitTemplate)
     state: BattleUnitState = Field(default_factory=BattleUnitState)
-
-
-_skills_module = import_module(".skills", __package__)
-
-UnitTemplate.model_rebuild(
-    _types_namespace={
-        "Aura": _skills_module.Aura,
-        "Injury": _skills_module.Injury,
-        "Item": _skills_module.Item,
-        "Skill": _skills_module.Skill,
-    }
-)

@@ -16,7 +16,7 @@ from ..models.enums import Side, StatName
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from ..models.mission import Mission
+    from .runtime import RuntimeMission
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,7 @@ def _manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
-def _nearest_enemy_dist(unit_id: str, mission: Mission) -> int | None:
+def _nearest_enemy_dist(unit_id: str, mission: RuntimeMission) -> int | None:
     self_u = mission.units.get(unit_id)
     if not self_u or not self_u.state.alive:
         return None
@@ -53,7 +53,7 @@ def _nearest_enemy_dist(unit_id: str, mission: Mission) -> int | None:
 
 
 def _nearest_enemy_dist_from(
-    coord: tuple[int, int], self_side: Side, mission: Mission
+    coord: tuple[int, int], self_side: Side, mission: RuntimeMission
 ) -> int | None:
     dists: list[int] = []
     for other in mission.living_units():
@@ -64,7 +64,7 @@ def _nearest_enemy_dist_from(
 
 
 def _score_attack(
-    mission: Mission, act: AttackAction, la: LegalAction, w: AIScoringWeights
+    mission: RuntimeMission, act: AttackAction, la: LegalAction, w: AIScoringWeights
 ) -> float:
     # Use provided evaluation if present (list_legal_actions with explain=True)
     ev = la.evaluation
@@ -92,7 +92,7 @@ def _score_attack(
     return score
 
 
-def _score_move(mission: Mission, act: MoveAction, w: AIScoringWeights) -> float:
+def _score_move(mission: RuntimeMission, act: MoveAction, w: AIScoringWeights) -> float:
     u = mission.units.get(act.unit_id)
     if not u:
         return 0.0
@@ -104,13 +104,13 @@ def _score_move(mission: Mission, act: MoveAction, w: AIScoringWeights) -> float
     return w.close_enemy * float(improvement)
 
 
-def _score_skill(_: Mission, __: UseSkillAction, w: AIScoringWeights) -> float:
+def _score_skill(_: RuntimeMission, __: UseSkillAction, w: AIScoringWeights) -> float:
     # Conservatively neutral in this simple heuristic; can be expanded later.
     return 0.0
 
 
 def choose_action(
-    mission: Mission,
+    mission: RuntimeMission,
     legal_actions: Sequence[LegalAction],
     *,
     weights: AIScoringWeights = DEFAULT_WEIGHTS,

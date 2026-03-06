@@ -30,7 +30,7 @@ def test_victory_on_eliminating_all_enemies(base_url: str):
     attacker.template.stats.base[StatName.ATK] = 10
 
     target.state.pos = (1, 2)
-    target.template.stats.base[StatName.HP] = 5
+    target.state.hp = 5
     target.template.stats.base[StatName.DEF] = 0
 
     # 3. Create mission with ELIMINATE_ALL_ENEMIES goal
@@ -99,7 +99,7 @@ def test_defeat_on_player_elimination(base_url: str):
     attacker.template.stats.base[StatName.INIT] = 20  # Ensure enemy goes first
 
     target.state.pos = (1, 2)
-    target.template.stats.base[StatName.HP] = 5
+    target.state.hp = 5
 
     # 3. Create mission
     mission = simple_mission([attacker, target])
@@ -121,3 +121,28 @@ def test_defeat_on_player_elimination(base_url: str):
     # 6. Check for defeat
     assert _hp_of(sess, target.id) <= 0
     assert _mission_status(sess) == "defeat"
+
+
+def test_actions_remain_available_after_victory(base_url: str):
+    attacker = hero_template()
+    attacker.state.pos = (1, 1)
+    attacker.template.stats.base[StatName.ATK] = 10
+
+    target = goblin_template()
+    target.state.pos = (1, 2)
+    target.state.hp = 5
+    target.template.stats.base[StatName.DEF] = 0
+
+    mission = simple_mission([attacker, target])
+    mission.turn_state.current_unit_id = attacker.id
+    mission.goals = [MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)]
+
+    sid, sess = _create_tbs_session(base_url, mission)
+    atk_action = AttackAction(attacker_id=attacker.id, target_id=target.id)
+    atk_payload = json.loads(atk_action.model_dump_json())
+    sess = _apply(base_url, sid, atk_payload)
+    assert _mission_status(sess) == "victory"
+
+    end_turn = {"kind": "end_turn"}
+    ex = _evaluate(base_url, sid, end_turn)
+    assert ex.get("legal", False)

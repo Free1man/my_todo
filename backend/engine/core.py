@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from backend.engine.systems import victory
 
 if TYPE_CHECKING:
+    from ..models.mission import Mission
     from ..models.session import TBSSession
     from .actions.base import Registry
 
@@ -26,6 +27,7 @@ from .actions.skill import (
     enumerate_legal as enumerate_skill_legal,
 )
 from .logging.logger import log_error, log_illegal
+from .runtime import mission_from_dto, mission_to_dto, session_from_dto, session_to_dto
 from .systems import combat, pathfinding, stats, turn
 
 default_handlers: Registry = {
@@ -44,7 +46,8 @@ class TBSEngine:
         h = self.handlers.get(type(action))
         if not h:
             return EvaluateResponse(legal=False, explanation="unknown action")
-        ok, why = h.evaluate(sess.mission, action)
+        runtime = session_from_dto(sess)
+        ok, why = h.evaluate(runtime.mission, action)
         return EvaluateResponse(legal=ok, explanation=why)
 
     def process_action(self, sess: TBSSession, action: Action):
@@ -53,22 +56,26 @@ class TBSEngine:
             log_illegal(sess, action, ev.explanation)
             return ev, None
         try:
-            new_sess = self.handlers[type(action)].apply(sess, action)
+            new_sess = self.apply(sess, action)
             return ev, new_sess
         except Exception as e:
             log_error(sess, action, e)
             raise
 
     def apply(self, sess: TBSSession, action: Action) -> TBSSession:
-        return self.handlers[type(action)].apply(sess, action)
+        runtime = session_from_dto(sess)
+        updated = self.handlers[type(action)].apply(runtime, action)
+        updated.mission.turn_state.status = victory.check(updated.mission)
+        return session_to_dto(updated)
 
     def list_legal_actions(
         self, sess: TBSSession, *, explain: bool = False
     ) -> LegalActionsResponse:
-        m = sess.mission
+        m = session_from_dto(sess).mission
         out: list[LegalAction] = []
+        m.turn_state.status = victory.check(m)
         cu = m.current_unit()
-        if not cu or not cu.state.alive:
+        if not cu:
             return LegalActionsResponse(actions=out)
 
         ok, why = self.handlers[EndTurnAction].evaluate(m, EndTurnAction())
@@ -90,24 +97,49 @@ class TBSEngine:
                     continue
                 if pathfinding.manhattan(cu.state.pos, other.state.pos) <= rng:
                     act = AttackAction(attacker_id=cu.id, target_id=other.id)
-                    ok, why = self.handlers[AttackAction].evaluate(m, act)
-                    if ok:
-                        evaluation = (
-                            combat.evaluate_attack(m, act.attacker_id, act.target_id)
-                            if explain
-                            else None
+                    evaluation = (
+                        combat.evaluate_attack(m, act.attacker_id, act.target_id)
+                        if explain
+                        else None
+                    )
+                    if evaluation is not None and evaluation.effects:
+                        effect = evaluation.effects[0]
+                        predicted_damage = int(evaluation.expected_damage)
+                        hp_before = int(effect.before or 0)
+                        hp_after = int(effect.after or 0)
+                        would_defeat = "yes" if hp_after == 0 else "no"
+                        explanation = (
+                            f"ok (predicted_damage={predicted_damage}, "
+                            f"target_hp_before={hp_before}, "
+                            f"target_hp_after={hp_after}, "
+                            f"would_defeat={would_defeat})"
                         )
-                        out.append(
-                            LegalAction(
-                                action=act, explanation=why, evaluation=evaluation
-                            )
+                    else:
+                        dmg, hp_before, hp_after, kills = combat.quick_attack_preview(
+                            m, cu, other
                         )
+                        explanation = (
+                            f"ok (predicted_damage={dmg}, "
+                            f"target_hp_before={hp_before}, "
+                            f"target_hp_after={hp_after}, "
+                            f"would_defeat={'yes' if kills else 'no'})"
+                        )
+                    out.append(
+                        LegalAction(
+                            action=act,
+                            explanation=explanation,
+                            evaluation=evaluation,
+                        )
+                    )
 
         out.extend(enumerate_skill_legal(m, cu, self.handlers, explain))
         return LegalActionsResponse(actions=out)
 
-    def initialize_mission(self, mission):
-        turn.initialize_mission(mission)
+    def initialize_mission(self, mission: Mission) -> Mission:
+        runtime = mission_from_dto(mission)
+        turn.initialize_mission(runtime)
+        runtime.turn_state.status = victory.check(runtime)
+        return mission_to_dto(runtime)
 
-    def check_victory_conditions(self, sess):
-        return victory.check(sess)
+    def check_victory_conditions(self, sess: TBSSession):
+        return victory.check(session_from_dto(sess).mission)

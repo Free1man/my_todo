@@ -1,24 +1,29 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ...models.api import MoveAction
 from ...models.enums import ActionLogResult
-from ...models.session import TBSSession
 from ..logging.logger import log_event
+from ..rules import require_ap, require_current_actor, require_unit
 from ..systems import pathfinding
 from .base import ActionHandler
+
+if TYPE_CHECKING:
+    from ..runtime import RuntimeSession
 
 
 class MoveHandler(ActionHandler):
     action_type = MoveAction
 
     def evaluate(self, mission, action: MoveAction):
-        u = mission.units.get(action.unit_id)
-        if not u:
-            return False, "unknown unit"
-        if not mission.is_current_actor(u.id):
-            return False, "unit cannot act"
-        if u.state.ap_left < 1:
-            return False, "no AP left"
+        u, reason = require_unit(mission, action.unit_id)
+        if reason:
+            return False, reason
+        if reason := require_current_actor(mission, u):
+            return False, reason
+        if reason := require_ap(u, 1):
+            return False, reason
         if action.to == u.state.pos:
             return False, "already at destination"
         if not mission.map.in_bounds(action.to):
@@ -33,10 +38,11 @@ class MoveHandler(ActionHandler):
             else (False, "cannot reach")
         )
 
-    def apply(self, sess: TBSSession, action: MoveAction):
+    def apply(self, sess: RuntimeSession, action: MoveAction):
         m = sess.mission
         u = m.units[action.unit_id]
         u.state.pos = action.to
         u.state.ap_left -= 1
+        m.invalidate_cache()
         log_event(sess, action, ActionLogResult.APPLIED)
-        return TBSSession(id=sess.id, mission=m)
+        return sess

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 
-import pytest
 import requests
 from backend.models.enums import GoalKind, Side, StatName, Terrain
 from backend.models.map import MapGrid, Tile
@@ -26,7 +25,7 @@ def _make_plain_map(w: int, h: int) -> MapGrid:
 
 def _make_unit(uid: str, name: str, side: Side, pos: Coord, init: int) -> Unit:
     base = {
-        StatName.HP: 12,
+        StatName.MAX_HP: 12,
         StatName.AP: 2,
         StatName.ATK: 3,
         StatName.DEF: 1,
@@ -42,7 +41,7 @@ def _make_unit(uid: str, name: str, side: Side, pos: Coord, init: int) -> Unit:
             side=side,
             stats=StatBlock(base=base),
         ),
-        state=BattleUnitState(pos=pos, ap_left=2),
+        state=BattleUnitState(pos=pos, hp=12, ap_left=2),
     )
 
 
@@ -83,23 +82,19 @@ def _alive_counts(sess_json: dict) -> tuple[int, int]:
     p = sum(
         1
         for u in units.values()
-        if u["state"].get("alive", True) and u["template"]["side"] == "player"
+        if u["state"]["hp"] > 0 and u["template"]["side"] == "player"
     )
     e = sum(
         1
         for u in units.values()
-        if u["state"].get("alive", True) and u["template"]["side"] == "enemy"
+        if u["state"]["hp"] > 0 and u["template"]["side"] == "enemy"
     )
     return p, e
 
 
 def _occupied_positions(sess_json: dict) -> set[Coord]:
     units: dict[str, dict] = sess_json["mission"]["units"]
-    return {
-        tuple(u["state"]["pos"])
-        for u in units.values()
-        if u["state"].get("alive", True)
-    }
+    return {tuple(u["state"]["pos"]) for u in units.values() if u["state"]["hp"] > 0}
 
 
 def _choose_move_destination(sess_json: dict, target: Coord) -> Coord | None:
@@ -174,7 +169,7 @@ def _apply_with_session(
     return g.json()
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_mass_battle_100x100_10v10_until_victory(base_url: str):
     # 1) Build mission and create a session
     mission = _build_mass_mission()
@@ -207,7 +202,7 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
 
         units = mission["units"]
         me = units[uid]
-        if not me["state"].get("alive", True):
+        if me["state"]["hp"] <= 0:
             sess = _apply_with_session(http, base_url, sid, {"kind": "end_turn"})
             steps += 1
             continue
@@ -216,8 +211,7 @@ def test_mass_battle_100x100_10v10_until_victory(base_url: str):
         foes = [
             (oid, tuple(u["state"]["pos"]))
             for oid, u in units.items()
-            if u["state"].get("alive", True)
-            and u["template"]["side"] != me["template"]["side"]
+            if u["state"]["hp"] > 0 and u["template"]["side"] != me["template"]["side"]
         ]
         if not foes:
             break

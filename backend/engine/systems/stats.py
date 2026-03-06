@@ -3,9 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...models.mission import Mission
     from ...models.modifiers import StatModifier
-    from ...models.units import Unit
+    from ..runtime import RuntimeMission, RuntimeUnit
 
 from pydantic import BaseModel
 
@@ -23,7 +22,13 @@ def _source_kind(src: ModifierSource | None) -> ModifierSource:
     return src or ModifierSource.CONTEXT
 
 
-def _collect_modifiers(mission: Mission, u: Unit) -> list[StatModifier]:
+def _collect_modifiers(
+    mission: RuntimeMission, u: RuntimeUnit
+) -> tuple[StatModifier, ...]:
+    cached = mission.cache.modifiers.get(u.id)
+    if cached is not None:
+        return cached
+
     all_mods: list[StatModifier] = []
     for it in u.template.items:
         all_mods.extend(it.mods)
@@ -46,7 +51,9 @@ def _collect_modifiers(mission: Mission, u: Unit) -> list[StatModifier]:
     for s in u.template.skills:
         all_mods.extend(s.passive_mods)
     all_mods.extend(mission.global_mods)
-    return all_mods
+    cached = tuple(all_mods)
+    mission.cache.modifiers[u.id] = cached
+    return cached
 
 
 def _apply_stat_modifiers(
@@ -107,11 +114,29 @@ def _apply_stat_modifiers(
     return max(int(base_applied * mul) + add_flat, 0), terms
 
 
-def eff_stat_with_trace(mission: Mission, u: Unit, stat: StatName) -> EffStat:
-    base_val = u.template.stats.base.get(stat, 0)
+def _base_stat_value(mission: RuntimeMission, u: RuntimeUnit, stat: StatName) -> int:
+    if stat == StatName.HP:
+        return u.state.hp
+    return u.template.stats.base.get(stat, 0)
+
+
+def eff_stat_with_extra_mods(
+    mission: RuntimeMission,
+    u: RuntimeUnit,
+    stat: StatName,
+    extra_mods: list[StatModifier] | tuple[StatModifier, ...],
+    *,
+    trace: bool = False,
+) -> int | EffStat:
+    base_val = _base_stat_value(mission, u, stat)
     result, terms = _apply_stat_modifiers(
-        base_val, stat, _collect_modifiers(mission, u), trace=True
+        base_val,
+        stat,
+        [*_collect_modifiers(mission, u), *extra_mods],
+        trace=trace,
     )
+    if not trace:
+        return result
 
     bd = StatBreakdown(
         name=stat.value.lower(),
@@ -122,9 +147,21 @@ def eff_stat_with_trace(mission: Mission, u: Unit, stat: StatName) -> EffStat:
     return EffStat(value=float(result), breakdown=bd)
 
 
-def eff_stat(mission: Mission, u: Unit, stat: StatName) -> int:
-    value = u.template.stats.base.get(stat, 0)
+def eff_stat_with_trace(
+    mission: RuntimeMission, u: RuntimeUnit, stat: StatName
+) -> EffStat:
+    traced = eff_stat_with_extra_mods(mission, u, stat, (), trace=True)
+    mission.cache.stats[(u.id, stat)] = int(traced.value)
+    return traced
+
+
+def eff_stat(mission: RuntimeMission, u: RuntimeUnit, stat: StatName) -> int:
+    cached = mission.cache.stats.get((u.id, stat))
+    if cached is not None:
+        return cached
+    value = _base_stat_value(mission, u, stat)
     result, _ = _apply_stat_modifiers(
         value, stat, _collect_modifiers(mission, u), trace=False
     )
+    mission.cache.stats[(u.id, stat)] = result
     return result

@@ -4,10 +4,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...models.modifiers import StatModifier
-    from ...models.units import Unit
+    from ..runtime import RuntimeUnit
 
 
-def decay_temporary_mods(u: Unit) -> None:
+def decay_temporary_mods(u: RuntimeUnit) -> None:
     """Reduce duration_turns on temp_mods; drop expired; keep None (permanent) and >1 (decremented)."""
     if not u.state.temp_mods:
         u.state.temp_mods = []

@@ -6,8 +6,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from ...models.map import MapGrid
-    from ...models.mission import Mission
-    from ...models.units import Unit
+    from ..runtime import RuntimeMission, RuntimeUnit
 
 Coord = tuple[int, int]
 
@@ -24,11 +23,11 @@ def neighbors(grid: MapGrid, c: Coord) -> list[Coord]:
     ]
 
 
-def occupied(mission: Mission, c: Coord) -> bool:
+def occupied(mission: RuntimeMission, c: Coord) -> bool:
     return mission.occupied(c)
 
 
-def reachable_tiles(mission: Mission, u: Unit) -> set[Coord]:
+def reachable_tiles(mission: RuntimeMission, u: RuntimeUnit) -> set[Coord]:
     from ...models.enums import StatName
     from .stats import eff_stat
 
@@ -56,7 +55,7 @@ def reachable_tiles(mission: Mission, u: Unit) -> set[Coord]:
     return reach
 
 
-def can_reach(mission: Mission, u: Unit, dst: Coord) -> bool:
+def can_reach(mission: RuntimeMission, u: RuntimeUnit, dst: Coord) -> bool:
     return dst in reachable_tiles(mission, u)
 
 

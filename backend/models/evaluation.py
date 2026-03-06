@@ -24,42 +24,33 @@ class ResistEntry(BaseModel):
     source: str
 
 
-class Penetration(BaseModel):
-    flat: float = 0.0
-    pct: float = 0.0
-
-
 class DamageBreakdown(BaseModel):
     damage_type: DamageType = DamageType.PHYSICAL
-    attack: StatBreakdown
-    defense: StatBreakdown
-    penetration: Penetration
-    pre_mitigation: float
+    attack: float
+    defense: float
     effective_defense: float
-    raw_after_def: float
-    skill_ratio: float
-    flat_power: float
-    vulnerability_mults: list[ResistEntry] = Field(default_factory=list)
-    attacker_damage_mults: list[StatTerm] = Field(default_factory=list)
-    final_before_crit: float
+    raw_damage: float
     crit_chance: float
     crit_mult: float
-    crit_expected: float
-    block_flat: float
-    block_mult: float
-    final_after_block: float
-    min_cap: float | None = 1.0
-    max_cap: float | None = None
-    final_capped: float
-    immune: bool = False
+    final_damage: float
+    formula: str
 
 
 class HitChanceBreakdown(BaseModel):
-    accuracy: StatBreakdown
-    evasion: StatBreakdown
     base: float
-    mods: list[StatTerm] = Field(default_factory=list)
     result: float
+    formula: str | None = None
+
+
+class EffectPreview(BaseModel):
+    target_id: str
+    effect_kind: str
+    stat: str | None = None
+    before: float | None = None
+    after: float | None = None
+    delta: float | None = None
+    duration_turns: int | None = None
+    note: str | None = None
 
 
 class ActionEvaluation(BaseModel):
@@ -73,5 +64,6 @@ class ActionEvaluation(BaseModel):
     max_damage: float
     damage: DamageBreakdown | None = None
     hit: HitChanceBreakdown | None = None
+    effects: list[EffectPreview] = Field(default_factory=list)
     legality_ok: bool = True
     illegal_reasons: list[str] = Field(default_factory=list)

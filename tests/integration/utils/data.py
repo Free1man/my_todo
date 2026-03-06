@@ -14,7 +14,13 @@ from backend.models.enums import (
 from backend.models.map import MapGrid, Tile
 from backend.models.mission import Mission, MissionGoal, TurnState
 from backend.models.modifiers import StatBlock, StatModifier
-from backend.models.skills import Item, Skill
+from backend.models.skills import (
+    ApplyModifierEffect,
+    DamageEffect,
+    HealEffect,
+    Item,
+    Skill,
+)
 from backend.models.units import BattleUnitState, Unit, UnitTemplate
 
 # ----- Item Templates -----
@@ -74,15 +80,7 @@ def heal_skill_template(amount: int = 3, *, duration_turns: int | None = None) -
         range=3,
         target=SkillTarget.ALLY_UNIT,
         cooldown=0,
-        apply_mods=[
-            StatModifier(
-                stat=StatName.HP,
-                operation=Operation.ADDITIVE,
-                value=amount,
-                source=ModifierSource.SKILL,
-                duration_turns=duration_turns,
-            )
-        ],
+        effects=[HealEffect(amount=amount)],
     )
 
 
@@ -98,21 +96,29 @@ def weaken_attack_skill_template(
         range=3,
         target=SkillTarget.ENEMY_UNIT,
         cooldown=0,
-        apply_mods=[
-            StatModifier(
-                stat=StatName.ATK,
-                operation=Operation.ADDITIVE,
-                value=delta_atk,
-                source=ModifierSource.SKILL,
-                duration_turns=duration_turns,
+        effects=[
+            ApplyModifierEffect(
+                modifier=StatModifier(
+                    stat=StatName.ATK,
+                    operation=Operation.ADDITIVE,
+                    value=delta_atk,
+                    source=ModifierSource.SKILL,
+                    duration_turns=duration_turns,
+                )
             )
         ],
     )
 
 
-def fireball_skill_template(power: int = 3, *, rng: int = 3, ap_cost: int = 1) -> Skill:
+def fireball_skill_template(
+    power: int = 3,
+    *,
+    rng: int = 3,
+    ap_cost: int = 1,
+    area_offsets: list[tuple[int, int]] | None = None,
+) -> Skill:
     """A TILE-target AOE that deals flat damage (negative HP) within an area around the target tile.
-    Shape is determined by the action payload's area_offsets; if none provided, engine defaults to 3x3.
+    Shape is defined on the skill itself; if no offsets are provided, engine defaults to 3x3.
     """
     return Skill(
         id="skill.fireball",
@@ -122,14 +128,8 @@ def fireball_skill_template(power: int = 3, *, rng: int = 3, ap_cost: int = 1) -
         range=rng,
         target=SkillTarget.TILE,
         cooldown=0,
-        apply_mods=[
-            StatModifier(
-                stat=StatName.HP,
-                operation=Operation.ADDITIVE,
-                value=-power,
-                source=ModifierSource.SKILL,
-            )
-        ],
+        area_offsets=area_offsets or [],
+        effects=[DamageEffect(amount=power)],
     )
 
 
@@ -152,7 +152,11 @@ def _make_unit(
             name=name,
             stats=StatBlock(base=stats),
         ),
-        state=BattleUnitState(pos=pos, ap_left=ap_left),
+        state=BattleUnitState(
+            pos=pos,
+            hp=stats.get(StatName.MAX_HP, stats.get(StatName.HP, 0)),
+            ap_left=ap_left,
+        ),
     )
 
 
@@ -164,7 +168,6 @@ def hero_template() -> Unit:
         name="Hero",
         pos=(0, 0),
         stats={
-            StatName.HP: 10,
             StatName.MAX_HP: 10,
             StatName.AP: 2,
             StatName.ATK: 3,
@@ -185,7 +188,6 @@ def archer_template() -> Unit:
         name="Archer",
         pos=(0, 0),
         stats={
-            StatName.HP: 9,
             StatName.MAX_HP: 9,
             StatName.AP: 2,
             StatName.ATK: 2,
@@ -206,7 +208,6 @@ def goblin_template() -> Unit:
         name="Goblin",
         pos=(0, 0),
         stats={
-            StatName.HP: 8,
             StatName.MAX_HP: 8,
             StatName.AP: 2,
             StatName.ATK: 2,
@@ -230,12 +231,26 @@ def simple_mission(units: list[Unit], width: int = 3, height: int = 3) -> Missio
             [Tile(terrain=Terrain.PLAIN) for _ in range(width)] for _ in range(height)
         ],
     )
-    unit_map = {u.id: u for u in units}
+    occupied: set[tuple[int, int]] = set()
+    unit_map: dict[str, Unit] = {}
+    for unit in units:
+        placed = unit.model_copy(deep=True)
+        if placed.state.pos in occupied:
+            for y in range(height):
+                for x in range(width):
+                    if (x, y) not in occupied:
+                        placed.state.pos = (x, y)
+                        break
+                else:
+                    continue
+                break
+        occupied.add(placed.state.pos)
+        unit_map[placed.id] = placed
     return Mission(
         id="m.test",
         name="Test Mission",
         map=grid,
         units=unit_map,
         goals=[MissionGoal(kind=GoalKind.ELIMINATE_ALL_ENEMIES)],
-        turn_state=TurnState(side_to_move=Side.PLAYER),
+        turn_state=TurnState(),
     )

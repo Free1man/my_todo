@@ -63,8 +63,12 @@ def _unit_state(sess_json: dict, uid: str) -> dict:
 
 
 def _hp_of(sess_json: dict, uid: str) -> int:
-    base = _unit_template(sess_json, uid).get("stats", {}).get("base", {})
-    return int(base.get("hp") or base.get("HP") or 0)
+    state = _unit_state(sess_json, uid)
+    return int(state.get("hp") or 0)
+
+
+def _is_alive(sess_json: dict, uid: str) -> bool:
+    return _hp_of(sess_json, uid) > 0
 
 
 def _create_tbs_session(base_url: str, mission: Mission) -> tuple[str, dict]:
@@ -124,9 +128,13 @@ def _evaluate(base_url: str, sid: str, payload: dict) -> dict:
                 "target_unit_id"
             ):
                 continue
+            if payload.get("target_tile") and a.get("target_tile") != payload.get(
+                "target_tile"
+            ):
+                continue
             return {"legal": True, "explanation": entry.get("explanation", "ok")}
-    if a.get("kind") == "end_turn":
-        return {"legal": True, "explanation": entry.get("explanation", "ok")}
+        if a.get("kind") == "end_turn":
+            return {"legal": True, "explanation": entry.get("explanation", "ok")}
     return {"legal": False, "explanation": "not in legal_actions"}
 
 

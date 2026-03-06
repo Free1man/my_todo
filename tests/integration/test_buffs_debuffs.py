@@ -1,5 +1,6 @@
 import json
 
+import requests
 from backend.models.api import AttackAction, UseSkillAction
 from backend.models.enums import (
     ModifierSource,
@@ -9,7 +10,7 @@ from backend.models.enums import (
     StatName,
 )
 from backend.models.modifiers import StatModifier
-from backend.models.skills import Skill
+from backend.models.skills import ApplyModifierEffect, Skill
 from tests.integration.utils.data import (
     goblin_template,
     heal_skill_template,
@@ -195,13 +196,15 @@ def test_cooldown_ticks_only_on_owner_turns(base_url: str):
             range=0,
             target=SkillTarget.SELF,
             cooldown=2,
-            apply_mods=[
-                StatModifier(
-                    stat=StatName.ATK,
-                    operation=Operation.ADDITIVE,
-                    value=1,
-                    source=ModifierSource.SKILL,
-                    duration_turns=2,
+            effects=[
+                ApplyModifierEffect(
+                    modifier=StatModifier(
+                        stat=StatName.ATK,
+                        operation=Operation.ADDITIVE,
+                        value=1,
+                        source=ModifierSource.SKILL,
+                        duration_turns=2,
+                    )
                 )
             ],
         )
@@ -265,13 +268,16 @@ def test_temp_modifiers_are_instanced_per_target(base_url: str):
             range=3,
             target=SkillTarget.TILE,
             cooldown=0,
-            apply_mods=[
-                StatModifier(
-                    stat=StatName.ATK,
-                    operation=Operation.ADDITIVE,
-                    value=-2,
-                    source=ModifierSource.SKILL,
-                    duration_turns=2,
+            area_offsets=[(0, 1), (1, 0)],
+            effects=[
+                ApplyModifierEffect(
+                    modifier=StatModifier(
+                        stat=StatName.ATK,
+                        operation=Operation.ADDITIVE,
+                        value=-2,
+                        source=ModifierSource.SKILL,
+                        duration_turns=2,
+                    )
                 )
             ],
         )
@@ -295,7 +301,6 @@ def test_temp_modifiers_are_instanced_per_target(base_url: str):
         unit_id="player",
         skill_id="skill.tile.sunder",
         target_tile=(1, 1),
-        area_offsets=[(0, 1), (1, 0)],
     )
     payload = json.loads(action.model_dump_json())
 
@@ -307,3 +312,45 @@ def test_temp_modifiers_are_instanced_per_target(base_url: str):
     assert _current_unit_id(sess) == "enemy_fast"
     assert _unit_state(sess, "enemy_fast")["temp_mods"][0]["duration_turns"] == 1
     assert _unit_state(sess, "enemy_slow")["temp_mods"][0]["duration_turns"] == 2
+
+
+def test_skill_explain_reports_exact_effects(base_url: str):
+    player = hero_template()
+    player.id = "player"
+    player.state.pos = (1, 1)
+    player.template.items = []
+    player.template.stats.base[StatName.INIT] = 100
+    player.template.skills = [heal_skill_template(amount=3)]
+
+    ally = hero_template()
+    ally.id = "ally"
+    ally.state.pos = (1, 2)
+    ally.state.hp = 6
+
+    mission = simple_mission([player, ally], width=4, height=4)
+    mission.turn_state.current_unit_id = player.id
+
+    sid, _ = _create_tbs_session(base_url, mission)
+    la = requests.get(
+        f"{base_url}/sessions/{sid}/legal_actions",
+        params={"explain": "true"},
+        timeout=5,
+    )
+    la.raise_for_status()
+    acts = la.json()["actions"]
+    ev = next(
+        (
+            entry.get("evaluation")
+            for entry in acts
+            if entry.get("action", {}).get("kind") == "use_skill"
+            and entry.get("action", {}).get("skill_id") == "skill.heal.simple"
+            and entry.get("action", {}).get("target_unit_id") == "ally"
+        ),
+        None,
+    )
+    assert ev is not None
+    assert ev["action_type"] == "skill"
+    assert ev["effects"][0]["target_id"] == "ally"
+    assert ev["effects"][0]["stat"] == "hp"
+    assert ev["effects"][0]["before"] == 6
+    assert ev["effects"][0]["after"] == 9

@@ -123,8 +123,10 @@ def list_sessions():
 @app.post("/sessions", response_model=SessionView)
 def create_session(req: CreateSessionRequest):
     mission = req.mission or default_demo_mission()
-    # Initialize dynamic initiative order and AP using engine's public API
-    engine.initialize_mission(mission)
+    try:
+        mission = engine.initialize_mission(mission)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     sid = str(uuid4())
     sess = TBSSession(id=sid, mission=mission)
     storage.save(sess)
@@ -152,14 +154,16 @@ def apply_action(sid: str, req: ApplyActionRequest):
     sess = storage.get(sid)
     if not sess:
         raise HTTPException(404, "session not found")
-    eval_result, new_state = engine.process_action(sess, req.action)
+    try:
+        eval_result, new_state = engine.process_action(sess, req.action)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     if not eval_result.legal:
         raise HTTPException(400, eval_result.explanation)
     # Auto-enemy: apply a few enemy actions if enabled on the mission
     if new_state.mission.enemy_ai:
-        applied, after = enemy_autoplay(engine, new_state)
+        _, after = enemy_autoplay(engine, new_state)
         new_state = after
-    new_state.mission.turn_state.status = engine.check_victory_conditions(new_state)
     # Applied action already logged inside engine.apply
 
     storage.save(new_state)

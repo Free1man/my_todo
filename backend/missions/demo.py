@@ -2,7 +2,15 @@ from ..models.enums import Side, StatName, Terrain
 from ..models.map import MapGrid, Tile
 from ..models.mission import GoalKind, Mission, MissionEvent, MissionGoal, TurnState
 from ..models.modifiers import ModifierSource, Operation, StatBlock, StatModifier
-from ..models.skills import Item, Skill, SkillKind, SkillTarget
+from ..models.skills import (
+    ApplyModifierEffect,
+    DamageEffect,
+    HealEffect,
+    Item,
+    Skill,
+    SkillKind,
+    SkillTarget,
+)
 from ..models.units import BattleUnitState, Unit, UnitTemplate
 
 
@@ -16,16 +24,23 @@ def _unit(
     items: list[Item] | None = None,
     skills: list[Skill] | None = None,
 ) -> Unit:
+    template = UnitTemplate(
+        side=side,
+        name=name,
+        items=items or [],
+        skills=skills or [],
+    )
+    if stats is not None:
+        template.stats = stats
+    max_hp = int(
+        template.stats.base.get(
+            StatName.MAX_HP, template.stats.base.get(StatName.HP, 10)
+        )
+    )
     return Unit(
         id=uid,
-        template=UnitTemplate(
-            side=side,
-            name=name,
-            stats=stats or StatBlock(),
-            items=items or [],
-            skills=skills or [],
-        ),
-        state=BattleUnitState(pos=pos),
+        template=template,
+        state=BattleUnitState(pos=pos, hp=max_hp),
     )
 
 
@@ -104,13 +119,15 @@ def default_demo_mission() -> Mission:
         ap_cost=1,
         range=2,
         target=SkillTarget.ALLY_UNIT,
-        apply_mods=[
-            StatModifier(
-                stat=StatName.ATK,
-                operation=Operation.ADDITIVE,
-                value=1,
-                source=ModifierSource.SKILL,
-                duration_turns=2,
+        effects=[
+            ApplyModifierEffect(
+                modifier=StatModifier(
+                    stat=StatName.ATK,
+                    operation=Operation.ADDITIVE,
+                    value=1,
+                    source=ModifierSource.SKILL,
+                    duration_turns=2,
+                )
             )
         ],
         cooldown=2,
@@ -123,14 +140,7 @@ def default_demo_mission() -> Mission:
         ap_cost=1,
         range=3,
         target=SkillTarget.ALLY_UNIT,
-        apply_mods=[
-            StatModifier(
-                stat=StatName.HP,
-                operation=Operation.ADDITIVE,
-                value=4,
-                source=ModifierSource.SKILL,
-            )
-        ],
+        effects=[HealEffect(amount=4)],
         cooldown=1,
     )
 
@@ -141,14 +151,7 @@ def default_demo_mission() -> Mission:
         ap_cost=2,
         range=4,
         target=SkillTarget.TILE,
-        apply_mods=[
-            StatModifier(
-                stat=StatName.HP,
-                operation=Operation.ADDITIVE,
-                value=-3,
-                source=ModifierSource.SKILL,
-            )
-        ],
+        effects=[DamageEffect(amount=3)],
         cooldown=2,
     )
 
@@ -159,13 +162,15 @@ def default_demo_mission() -> Mission:
         ap_cost=1,
         range=0,
         target=SkillTarget.SELF,
-        apply_mods=[
-            StatModifier(
-                stat=StatName.ATK,
-                operation=Operation.ADDITIVE,
-                value=1,
-                source=ModifierSource.SKILL,
-                duration_turns=2,
+        effects=[
+            ApplyModifierEffect(
+                modifier=StatModifier(
+                    stat=StatName.ATK,
+                    operation=Operation.ADDITIVE,
+                    value=1,
+                    source=ModifierSource.SKILL,
+                    duration_turns=2,
+                )
             )
         ],
         cooldown=2,
@@ -201,10 +206,10 @@ def default_demo_mission() -> Mission:
             pos=(5, 5),
             stats=StatBlock(
                 base={
-                    StatName.HP: 8,
                     StatName.AP: 2,
                     StatName.ATK: 2,
                     StatName.DEF: 0,
+                    StatName.MAX_HP: 8,
                     StatName.MOV: 4,
                     StatName.RNG: 1,
                     StatName.CRIT: 0,
@@ -219,10 +224,10 @@ def default_demo_mission() -> Mission:
             pos=(6, 5),
             stats=StatBlock(
                 base={
-                    StatName.HP: 8,
                     StatName.AP: 2,
                     StatName.ATK: 2,
                     StatName.DEF: 0,
+                    StatName.MAX_HP: 8,
                     StatName.MOV: 4,
                     StatName.RNG: 1,
                     StatName.CRIT: 0,
@@ -245,6 +250,6 @@ def default_demo_mission() -> Mission:
         post_events=[],
         global_mods=[],
         enemy_ai=True,
-        turn_state=TurnState(side_to_move=Side.PLAYER, turn=1),
+        turn_state=TurnState(turn=1),
     )
     return mission

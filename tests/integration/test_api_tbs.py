@@ -5,7 +5,9 @@ import pytest
 import requests
 import requests as _requests
 from backend.models.api import AttackAction, MoveAction
-from backend.models.enums import Side, StatName
+from backend.models.enums import Side, StatName, Terrain
+from backend.models.map import MapGrid, Tile
+from backend.models.mission import Mission
 from tests.integration.utils.data import (
     archer_template,
     goblin_template,
@@ -35,7 +37,7 @@ def test_melee_adjacent_attack_applies_damage(base_url: str):
     attacker.template.items = []  # No items for this test
 
     target.state.pos = (1, 2)
-    target.template.stats.base[StatName.HP] = 10
+    target.state.hp = 10
     target.template.stats.base[StatName.DEF] = 0
 
     # 3. Create mission
@@ -306,3 +308,24 @@ def test_attack_can_target_allies(base_url: str):
     sess = _apply(base_url, sid, atk_payload)
     hp_after = _hp_of(sess, ally.id)
     assert hp_after < hp_before
+
+
+def test_duplicate_occupancy_rejected_on_create(base_url: str):
+    a = hero_template()
+    b = goblin_template()
+    a.state.pos = (0, 0)
+    b.state.pos = (0, 0)
+
+    mission = Mission(
+        id="m.dup",
+        name="Duplicate Occupancy",
+        map=MapGrid(
+            width=3,
+            height=3,
+            tiles=[[Tile(terrain=Terrain.PLAIN) for _ in range(3)] for _ in range(3)],
+        ),
+        units={a.id: a, b.id: b},
+    )
+
+    with pytest.raises(requests.HTTPError):
+        _create_tbs_session(base_url, mission)

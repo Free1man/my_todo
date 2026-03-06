@@ -1,7 +1,33 @@
+from __future__ import annotations
+
+from typing import Annotated, Literal
+
 from pydantic import BaseModel, Field
 
-from .enums import SkillKind, SkillTarget
+from .enums import Coord, DamageType, SkillKind, SkillTarget
 from .modifiers import StatModifier
+
+
+class DamageEffect(BaseModel):
+    kind: Literal["damage"] = "damage"
+    amount: int
+    damage_type: DamageType = DamageType.MAGIC
+
+
+class HealEffect(BaseModel):
+    kind: Literal["heal"] = "heal"
+    amount: int
+
+
+class ApplyModifierEffect(BaseModel):
+    kind: Literal["apply_modifier"] = "apply_modifier"
+    modifier: StatModifier
+
+
+SkillEffect = Annotated[
+    DamageEffect | HealEffect | ApplyModifierEffect,
+    Field(discriminator="kind"),
+]
 
 
 class Skill(BaseModel):
@@ -13,7 +39,8 @@ class Skill(BaseModel):
     target: SkillTarget = SkillTarget.NONE
     cooldown: int = 0
     charges: int | None = None
-    apply_mods: list[StatModifier] = Field(default_factory=list)
+    area_offsets: list[Coord] = Field(default_factory=list)
+    effects: list[SkillEffect] = Field(default_factory=list)
     passive_mods: list[StatModifier] = Field(default_factory=list)
 
 

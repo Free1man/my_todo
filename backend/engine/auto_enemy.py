@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from ..models.enums import Side
 from .ai import choose_action
+from .runtime import mission_from_dto
 
 if TYPE_CHECKING:  # typing-only imports
     from collections.abc import Sequence
@@ -25,15 +26,17 @@ def enemy_autoplay(
     applied = 0
     cur = sess
     while applied < max_chain:
+        runtime_mission = mission_from_dto(cur.mission)
         # Only act for enemy side; stop if it's player's turn
-        if cur.mission.turn_state.side_to_move != Side.ENEMY:
+        current = runtime_mission.current_unit()
+        if not current or current.template.side != Side.ENEMY:
             break
         # Ask for explain=True so attacks include expected_damage/AP details for scoring
         la = engine.list_legal_actions(cur, explain=True)
         actions: Sequence[LegalAction] = tuple(la.actions)
         if not actions:
             break
-        picked = choose_action(cur.mission, actions)
+        picked = choose_action(runtime_mission, actions)
         if picked is None:
             break
         action: Action = picked

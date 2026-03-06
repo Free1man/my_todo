@@ -3,13 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...models.session import TBSSession
+    from ..runtime import RuntimeMission
 
 from ...models.enums import GoalKind, MissionStatus, Side
 
 
-def check(sess: TBSSession) -> MissionStatus:
-    mission = sess.mission
+def check(mission: RuntimeMission) -> MissionStatus:
     if mission.turn_state.status != MissionStatus.IN_PROGRESS:
         return mission.turn_state.status
 

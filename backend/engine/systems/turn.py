@@ -3,15 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...models.mission import Mission
-    from ...models.units import Unit
+    from ..runtime import RuntimeMission, RuntimeUnit
 
 from ...models.enums import Side, StatName
 from . import stats
 from .effects import decay_temporary_mods
 
 
-def _tick_unit_turn_state(u: Unit) -> None:
+def _tick_unit_turn_state(u: RuntimeUnit) -> None:
     """Advance cooldowns and temporary effects for a single unit turn."""
     for sid in list(u.state.skill_cooldowns.keys()):
         remaining = u.state.skill_cooldowns.get(sid, 0)
@@ -22,15 +21,17 @@ def _tick_unit_turn_state(u: Unit) -> None:
     decay_temporary_mods(u)
 
 
-def _begin_unit_turn(mission: Mission, u: Unit, *, tick_state: bool) -> None:
+def _begin_unit_turn(
+    mission: RuntimeMission, u: RuntimeUnit, *, tick_state: bool
+) -> None:
     if tick_state:
         _tick_unit_turn_state(u)
+    mission.invalidate_cache()
     u.state.ap_left = stats.eff_stat(mission, u, StatName.AP)
-    mission.turn_state.side_to_move = u.template.side
 
 
-def recompute_initiative_order(mission: Mission) -> None:
-    living: list[Unit] = mission.living_units()
+def recompute_initiative_order(mission: RuntimeMission) -> None:
+    living: list[RuntimeUnit] = mission.living_units()
     living.sort(
         key=lambda u: (
             -stats.eff_stat(mission, u, StatName.INIT),
@@ -42,13 +43,9 @@ def recompute_initiative_order(mission: Mission) -> None:
     mission.turn_state.current_unit_id = (
         mission.turn_state.initiative_order[0] if living else None
     )
-    if mission.turn_state.current_unit_id:
-        mission.turn_state.side_to_move = mission.units[
-            mission.turn_state.current_unit_id
-        ].template.side
 
 
-def end_turn(mission: Mission) -> None:
+def end_turn(mission: RuntimeMission) -> None:
     order = mission.turn_state.initiative_order or []
     if not order:
         recompute_initiative_order(mission)
@@ -85,7 +82,7 @@ def end_turn(mission: Mission) -> None:
         mission.turn_state.current_unit_id = None
 
 
-def initialize_mission(mission: Mission) -> None:
+def initialize_mission(mission: RuntimeMission) -> None:
     requested_cursor = mission.turn_state.current_unit_id
     recompute_initiative_order(mission)
     if requested_cursor and requested_cursor in mission.turn_state.initiative_order:
