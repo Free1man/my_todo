@@ -20,6 +20,7 @@ ACTION_LOG_MAX = int(os.getenv("ACTION_LOG_MAX", "200"))
 TOUCH_COOLDOWN_SECONDS = float(os.getenv("SESSION_TOUCH_COOLDOWN_SECONDS", "0.25"))
 _SESSION_ADAPTER = TypeAdapter(TBSSession)
 _hot_sessions: dict[str, TBSSession] = {}
+_hot_session_json: dict[str, str] = {}
 _last_touch_at: dict[str, float] = {}
 
 
@@ -65,12 +66,21 @@ def _cache_put(sess: TBSSession) -> None:
     _hot_sessions[sess.id] = sess
 
 
+def _cache_put_json(sid: str, payload: str) -> None:
+    _hot_session_json[sid] = payload
+
+
 def _cache_get(sid: str) -> TBSSession | None:
     return _hot_sessions.get(sid)
 
 
+def _cache_get_json(sid: str) -> str | None:
+    return _hot_session_json.get(sid)
+
+
 def _cache_drop(sid: str) -> None:
     _hot_sessions.pop(sid, None)
+    _hot_session_json.pop(sid, None)
     _last_touch_at.pop(sid, None)
 
 
@@ -112,13 +122,16 @@ def _enforce_cap() -> None:
     pipe.execute()
 
 
-def save(sess: TBSSession) -> None:
+def save(sess: TBSSession) -> str:
     # write payload
-    r.set(_k(sess.id), sess.model_dump_json())
+    payload = sess.model_dump_json()
+    r.set(_k(sess.id), payload)
     _cache_put(sess)
+    _cache_put_json(sess.id, payload)
     # index/update recency and enforce cap
     _maybe_touch(sess.id, force=True)
     _enforce_cap()
+    return payload
 
 
 def get(sid: str) -> TBSSession | None:
@@ -137,10 +150,31 @@ def get(sid: str) -> TBSSession | None:
         return None
     sess = _SESSION_ADAPTER.validate_json(raw)
     _cache_put(sess)
+    _cache_put_json(sid, raw)
     if EVICT_ON_GET:
         _maybe_touch(sid)  # makes policy LRU
         _enforce_cap()  # optional; cheap and keeps things tidy
     return sess
+
+
+def get_json(sid: str) -> str | None:
+    cached = _cache_get_json(sid)
+    if cached is not None:
+        if EVICT_ON_GET:
+            _maybe_touch(sid)
+            _enforce_cap()
+        return cached
+
+    raw = r.get(_k(sid))
+    if raw is None:
+        r.zrem(INDEX, sid)
+        _cache_drop(sid)
+        return None
+    _cache_put_json(sid, raw)
+    if EVICT_ON_GET:
+        _maybe_touch(sid)
+        _enforce_cap()
+    return raw
 
 
 def delete(sid: str) -> bool:
@@ -165,6 +199,7 @@ def list_all() -> list[TBSSession]:
             sess = _SESSION_ADAPTER.validate_json(raw)
             sessions.append(sess)
             _cache_put(sess)
+            _cache_put_json(sess.id, raw)
         else:
             stale_sids.append(sids[i])
 

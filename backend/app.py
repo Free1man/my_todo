@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from uuid import uuid4
 
 import backend.debug_hook  # noqa: F401  # must be first import
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import storage
@@ -43,6 +44,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _session_response(session_json: str) -> Response:
+    return Response(content=session_json, media_type="application/json")
+
+
+def _apply_action_response(explanation: str, session_json: str) -> Response:
+    content = (
+        '{"applied":true,"explanation":'
+        + json.dumps(explanation)
+        + ',"session":'
+        + session_json
+        + "}"
+    )
+    return Response(content=content, media_type="application/json")
 
 
 @app.get("/")
@@ -129,16 +145,16 @@ def create_session(req: CreateSessionRequest):
         raise HTTPException(400, str(exc)) from exc
     sid = str(uuid4())
     sess = TBSSession(id=sid, mission=mission)
-    storage.save(sess)
-    return SessionView(id=sess.id, mission=sess.mission)
+    session_json = storage.save(sess)
+    return _session_response(session_json)
 
 
 @app.get("/sessions/{sid}", response_model=SessionView)
 def get_session(sid: str):
-    sess = storage.get(sid)
-    if not sess:
+    session_json = storage.get_json(sid)
+    if not session_json:
         raise HTTPException(404, "session not found")
-    return SessionView(id=sess.id, mission=sess.mission)
+    return _session_response(session_json)
 
 
 @app.get("/sessions/{sid}/legal_actions", response_model=LegalActionsResponse)
@@ -166,11 +182,10 @@ def apply_action(sid: str, req: ApplyActionRequest):
         new_state = after
     # Applied action already logged inside engine.apply
 
-    storage.save(new_state)
-    return ApplyActionResponse(
-        applied=True,
+    session_json = storage.save(new_state)
+    return _apply_action_response(
         explanation=eval_result.explanation,
-        session=SessionView(id=new_state.id, mission=new_state.mission),
+        session_json=session_json,
     )
 
 
