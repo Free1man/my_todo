@@ -42,21 +42,27 @@ class TBSEngine:
     def __init__(self, handlers: Registry | None = None):
         self.handlers: Registry = handlers or default_handlers
 
-    def evaluate(self, sess: TBSSession, action: Action) -> EvaluateResponse:
-        h = self.handlers.get(type(action))
-        if not h:
+    def _evaluate_runtime(self, runtime, action: Action) -> EvaluateResponse:
+        handler = self.handlers.get(type(action))
+        if not handler:
             return EvaluateResponse(legal=False, explanation="unknown action")
-        runtime = session_from_dto(sess)
-        ok, why = h.evaluate(runtime.mission, action)
+        ok, why = handler.evaluate(runtime.mission, action)
         return EvaluateResponse(legal=ok, explanation=why)
 
+    def evaluate(self, sess: TBSSession, action: Action) -> EvaluateResponse:
+        runtime = session_from_dto(sess)
+        return self._evaluate_runtime(runtime, action)
+
     def process_action(self, sess: TBSSession, action: Action):
-        ev = self.evaluate(sess, action)
+        runtime = session_from_dto(sess)
+        ev = self._evaluate_runtime(runtime, action)
         if not ev.legal:
             log_illegal(sess, action, ev.explanation)
             return ev, None
         try:
-            new_sess = self.apply(sess, action)
+            updated = self.handlers[type(action)].apply(runtime, action)
+            updated.mission.turn_state.status = victory.check(updated.mission)
+            new_sess = session_to_dto(updated)
             return ev, new_sess
         except Exception as e:
             log_error(sess, action, e)

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from ..models.enums import Coord, MissionStatus, Side, StatName
 from ..models.mission import Mission, MissionEvent, MissionGoal, TurnState
+from ..models.modifiers import StatBlock
 from ..models.session import TBSSession
 from ..models.units import BattleUnitState, Unit, UnitTemplate
 
@@ -144,6 +145,23 @@ class RuntimeSession:
     mission: RuntimeMission
 
 
+def _normalized_template(template: UnitTemplate) -> UnitTemplate:
+    if StatName.HP not in template.stats.base:
+        return template
+    base_stats = dict(template.stats.base)
+    base_stats.pop(StatName.HP, None)
+    return UnitTemplate(
+        side=template.side,
+        name=template.name,
+        stats=StatBlock(base=base_stats),
+        items=list(template.items),
+        injuries=list(template.injuries),
+        auras=list(template.auras),
+        skills=list(template.skills),
+        tags=list(template.tags),
+    )
+
+
 def _runtime_unit(dto: Unit) -> RuntimeUnit:
     max_hp = int(
         dto.template.stats.base.get(
@@ -153,7 +171,7 @@ def _runtime_unit(dto: Unit) -> RuntimeUnit:
     hp = max(0, min(int(dto.state.hp), max_hp if max_hp > 0 else int(dto.state.hp)))
     return RuntimeUnit(
         id=dto.id,
-        template=dto.template.model_copy(deep=True),
+        template=_normalized_template(dto.template),
         state=RuntimeUnitState(
             pos=dto.state.pos,
             hp=hp,
@@ -169,13 +187,13 @@ def mission_from_dto(dto: Mission) -> RuntimeMission:
     runtime = RuntimeMission(
         id=dto.id,
         name=dto.name,
-        map=dto.map.model_copy(deep=True),
+        map=dto.map,
         units={uid: _runtime_unit(unit) for uid, unit in dto.units.items()},
         max_turns=dto.max_turns,
-        goals=[goal.model_copy(deep=True) for goal in dto.goals],
-        pre_events=[event.model_copy(deep=True) for event in dto.pre_events],
-        post_events=[event.model_copy(deep=True) for event in dto.post_events],
-        global_mods=deepcopy(dto.global_mods),
+        goals=list(dto.goals),
+        pre_events=list(dto.pre_events),
+        post_events=list(dto.post_events),
+        global_mods=list(dto.global_mods),
         enemy_ai=dto.enemy_ai,
         turn_state=RuntimeTurnState(
             turn=dto.turn_state.turn,
@@ -191,11 +209,9 @@ def mission_from_dto(dto: Mission) -> RuntimeMission:
 def mission_to_dto(runtime: RuntimeMission) -> Mission:
     units: dict[str, Unit] = {}
     for uid, unit in runtime.units.items():
-        template = unit.template.model_copy(deep=True)
-        template.stats.base.pop(StatName.HP, None)
         units[uid] = Unit(
             id=uid,
-            template=template,
+            template=unit.template,
             state=BattleUnitState(
                 pos=unit.state.pos,
                 hp=unit.state.hp,
@@ -208,13 +224,13 @@ def mission_to_dto(runtime: RuntimeMission) -> Mission:
     return Mission(
         id=runtime.id,
         name=runtime.name,
-        map=runtime.map.model_copy(deep=True),
+        map=runtime.map,
         units=units,
         max_turns=runtime.max_turns,
-        goals=[goal.model_copy(deep=True) for goal in runtime.goals],
-        pre_events=[event.model_copy(deep=True) for event in runtime.pre_events],
-        post_events=[event.model_copy(deep=True) for event in runtime.post_events],
-        global_mods=deepcopy(runtime.global_mods),
+        goals=list(runtime.goals),
+        pre_events=list(runtime.pre_events),
+        post_events=list(runtime.post_events),
+        global_mods=list(runtime.global_mods),
         enemy_ai=runtime.enemy_ai,
         turn_state=TurnState(
             turn=runtime.turn_state.turn,
